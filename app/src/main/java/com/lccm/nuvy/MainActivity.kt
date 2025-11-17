@@ -1,6 +1,8 @@
 package com.lccm.nuvy
 
 import android.os.Bundle
+import android.widget.Toast
+import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -24,12 +26,63 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lccm.nuvy.ui.theme.NuvyTheme
 
+// --- "BASE DE DATOS" DE ARCHIVOS (Definida una vez) ---
+val allFiles = listOf(
+    FileListItem(name = "blinky.c", details = "Modificado hace 2 días • 1.2 KB • Local"),
+    FileListItem(name = "wifi_setup.c", details = "Modificado hoy • 3.8 KB • Nube"),
+    FileListItem(name = "pwm_driver.c", details = "Modificado hace 5 h • 6.1 KB • Local"),
+    FileListItem(name = "/Proyectos/pico/", details = "12 archivos • Local", isFolder = true, tag = null),
+    FileListItem(name = "/Nuvy Cloud/", details = "8 archivos • Nube", isFolder = true, tag = null)
+)
+
+// --- "BASE DE DATOS" DE CONTENIDO (Mutable) ---
+var fileContentDatabase = mapOf(
+    "blinky.c" to """
+    // Archivo: blinky.c
+    #include "pico/stdlib.h"
+    
+    int main() {
+      const uint LED_PIN = 25;
+      gpio_init(LED_PIN);
+      gpio_set_dir(LED_PIN, GPIO_OUT);
+      while (true) {
+        gpio_put(LED_PIN, 1);
+        sleep_ms(250);
+        gpio_put(LED_PIN, 0);
+        sleep_ms(250);
+      }
+    }
+    """.trimIndent(),
+    "wifi_setup.c" to """
+    // Archivo: wifi_setup.c
+    #include "pico/stdlib.h"
+    
+    int main() {
+      // Lógica de WiFi...
+      printf("WiFi conectado!\n");
+    }
+    """.trimIndent(),
+    "pwm_driver.c" to """
+    // Archivo: pwm_driver.c
+    #include "pico/stdlib.h"
+    
+    int main() {
+      // Lógica de PWM...
+    }
+    """.trimIndent()
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             NuvyTheme {
+                // --- ESTADOS ---
                 var currentScreen by remember { mutableStateOf(NuvyDestinations.HOME) }
+                var currentFileName by remember { mutableStateOf("main.c") }
+                var editorCode by remember { mutableStateOf("// Escribe tu código C aquí...") }
+                var showNewFileDialog by remember { mutableStateOf(false) }
+                var fileList by remember { mutableStateOf(allFiles) }
 
                 val navigateTo: (String) -> Unit = { screen ->
                     currentScreen = screen
@@ -37,35 +90,92 @@ class MainActivity : ComponentActivity() {
 
                 when (currentScreen) {
 
-                    // --- CAMBIO AQUÍ ---
-                    // "HOME" ahora es la única pantalla que usa NuvyScreen.
-                    // "CONNECT" y "EDITOR" te llevarán a las pantallas
-                    // principales pero con la barra de navegación.
-                    NuvyDestinations.HOME -> {
+                    NuvyDestinations.HOME, NuvyDestinations.CONNECT -> {
                         NuvyScreen(
                             onConnectClicked = { navigateTo(NuvyDestinations.CONNECT_DEVICE) },
                             onEditorClicked = { navigateTo(NuvyDestinations.EDITOR) }
                         )
                     }
 
-                    // --- NUEVA LÓGICA DE NAVEGACIÓN ---
-                    // Si el usuario presiona "Conectar" o "Editor" en la barra de navegación,
-                    // lo llevamos a las pantallas correspondientes.
-                    NuvyDestinations.CONNECT -> {
-                        ConnectDeviceScreen(
-                            onPermitAccess = { navigateTo(NuvyDestinations.ACCESS_GRANTED) },
-                            onTryAgain = {},
-                            onNavigate = { screenName -> navigateTo(screenName) }
-                        )
-                    }
                     NuvyDestinations.EDITOR -> {
                         EditorScreen(
+                            currentFileName = currentFileName,
+                            codeText = editorCode,
+                            onCodeChange = { editorCode = it },
                             onNavigate = { screenName -> navigateTo(screenName) },
                             onOpenFile = { navigateTo(NuvyDestinations.OPEN_FILE) },
-                            onNewFile = { navigateTo(NuvyDestinations.NEW_FILE) },
-                            onSave = { navigateTo(NuvyDestinations.FILE_SAVED) },
+                            onSaveSuccess = {
+                                fileContentDatabase = fileContentDatabase.toMutableMap().apply {
+                                    set(currentFileName, editorCode)
+                                }
+                                navigateTo(NuvyDestinations.FILE_SAVED)
+                            },
                             onCompile = { navigateTo(NuvyDestinations.BUILD_PROCESS) },
-                            onUpload = { navigateTo(NuvyDestinations.OPEN_FILE) }
+                            onUpload = { navigateTo(NuvyDestinations.OPEN_FILE) },
+                            onNewFile = { showNewFileDialog = true }
+                        )
+
+                        if (showNewFileDialog) {
+                            NewFileDialog(
+                                onDismiss = { showNewFileDialog = false },
+                                onCreate = { newName, newContent ->
+                                    val fullFileName = "$newName.c"
+                                    currentFileName = fullFileName
+                                    editorCode = newContent
+
+                                    fileContentDatabase = fileContentDatabase.toMutableMap().apply {
+                                        set(fullFileName, newContent)
+                                    }
+                                    fileList = listOf(FileListItem(fullFileName, "Creado ahora • Local", false)) + fileList
+
+                                    showNewFileDialog = false
+                                }
+                            )
+                        }
+                    }
+
+                    NuvyDestinations.OPEN_FILE -> {
+                        OpenFileScreen(
+                            onNavigate = { screenName -> navigateTo(screenName) },
+                            onOpen = { /*TODO*/ },
+                            files = fileList,
+                            onFileImported = { uri ->
+
+                                var importedFileName = "archivo.c"
+                                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                                    if (cursor.moveToFirst()) {
+                                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                                        if (nameIndex != -1) {
+                                            importedFileName = cursor.getString(nameIndex)
+                                        }
+                                    }
+                                }
+
+                                val newFile = FileListItem(
+                                    name = importedFileName,
+                                    details = "Importado hoy • Local",
+                                    isFolder = false
+                                )
+
+                                fileList = listOf(newFile) + fileList
+
+                                Toast.makeText(this, "$importedFileName importado", Toast.LENGTH_SHORT).show()
+                            },
+                            onFileClick = { fileItem ->
+                                currentFileName = fileItem.name
+                                editorCode = fileContentDatabase[fileItem.name] ?: "// Contenido no encontrado"
+                                navigateTo(NuvyDestinations.FILE_PREVIEW)
+                            }
+                        )
+                    }
+
+                    NuvyDestinations.FILE_PREVIEW -> {
+                        FilePreviewScreen(
+                            onNavigate = { screenName -> navigateTo(screenName) },
+                            fileName = currentFileName,
+                            fileContent = editorCode,
+                            onEdit = { navigateTo(NuvyDestinations.EDITOR) },
+                            onCancel = { navigateTo(NuvyDestinations.OPEN_FILE) }
                         )
                     }
 
@@ -76,46 +186,20 @@ class MainActivity : ComponentActivity() {
                             onNavigate = { screenName -> navigateTo(screenName) }
                         )
                     }
-
                     NuvyDestinations.ACCESS_GRANTED -> {
                         AccessGrantedScreen(
                             onContinueClicked = { navigateTo(NuvyDestinations.UPLOAD_PROGRESS) },
                             onNavigate = { screenName -> navigateTo(screenName) }
                         )
                     }
-
-                    NuvyDestinations.OPEN_FILE -> {
-                        OpenFileScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onOpen = { /*TODO*/ },
-                            onImport = { /*TODO*/ },
-                            onFileClick = { navigateTo(NuvyDestinations.FILE_PREVIEW) }
-                        )
-                    }
-
-                    NuvyDestinations.FILE_PREVIEW -> {
-                        FilePreviewScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoToEditor = { navigateTo(NuvyDestinations.EDITOR) },
-                            onGenerateUf2 = { navigateTo(NuvyDestinations.BUILD_PROCESS) }
-                        )
-                    }
-
-                    NuvyDestinations.NEW_FILE -> {
-                        NewFileScreen(
-                            onGoBack = { navigateTo(NuvyDestinations.EDITOR) },
-                            onCreate = { navigateTo(NuvyDestinations.EDITOR) }
-                        )
-                    }
-
                     NuvyDestinations.FILE_SAVED -> {
                         FileSavedScreen(
                             onNavigate = { screenName -> navigateTo(screenName) },
                             onGoBackToEditor = { navigateTo(NuvyDestinations.EDITOR) },
-                            onTryAgain = { /*TODO*/ }
+                            onTryAgain = { /*TODO*/ },
+                            fileName = currentFileName
                         )
                     }
-
                     NuvyDestinations.BUILD_PROCESS -> {
                         BuildScreen(
                             onNavigate = { screenName -> navigateTo(screenName) },
@@ -124,7 +208,6 @@ class MainActivity : ComponentActivity() {
                             onBuildComplete = { navigateTo(NuvyDestinations.DOWNLOAD_READY) }
                         )
                     }
-
                     NuvyDestinations.DOWNLOAD_READY -> {
                         DownloadReadyScreen(
                             onNavigate = { screenName -> navigateTo(screenName) },
@@ -134,7 +217,8 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // --- BLOQUE ACTUALIZADO ---
+                    // --- AQUÍ ESTABA EL ERROR (TEXTO EXTRA ELIMINADO) ---
+
                     NuvyDestinations.UPLOAD_PROGRESS -> {
                         UploadScreen(
                             onNavigate = { screenName -> navigateTo(screenName) },
@@ -143,13 +227,10 @@ class MainActivity : ComponentActivity() {
                             onUploadFinished = { navigateTo(NuvyDestinations.UPLOAD_COMPLETE) }
                         )
                     }
-
                     NuvyDestinations.UPLOAD_COMPLETE -> {
                         UploadCompleteScreen(
                             onNavigate = { screenName -> navigateTo(screenName) },
                             onGoBack = { navigateTo(NuvyDestinations.EDITOR) },
-                            // --- CAMBIO AQUÍ ---
-                            // "Finalizar" te lleva al menú principal (HOME)
                             onFinalize = { navigateTo(NuvyDestinations.HOME) }
                         )
                     }
@@ -158,6 +239,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
 // =================================================================================
 // PANTALLA 1: NuvyScreen (Esta parte no cambia)
 // =================================================================================

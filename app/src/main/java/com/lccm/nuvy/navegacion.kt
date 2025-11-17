@@ -11,12 +11,12 @@ object NuvyDestinations {
     const val OPEN_FILE = "AbrirArchivo"
     const val FILE_PREVIEW = "VistaPreviaArchivo"
 
-    const val NEW_FILE = "NuevoArchivo"
+    // const val NEW_FILE = "NuevoArchivo" // <-- LÍNEA ELIMINADA
     const val FILE_SAVED = "ArchivoGuardado"
 
     const val BUILD_PROCESS = "ProcesoCompilacion"
     const val DOWNLOAD_READY = "DescargaLista"
 
     const val UPLOAD_PROGRESS = "SubiendoArchivo"
-    const val UPLOAD_COMPLETE = "TransferenciaFinalizada" // <-- AÑADE ESTA LÍNEA
+    const val UPLOAD_COMPLETE = "TransferenciaFinalizada"
 }

@@ -1,13 +1,26 @@
 package com.lccm.nuvy
 
+// --- IMPORTACIONES NUEVAS ---
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import java.io.IOException
+// --- FIN DE IMPORTACIONES NUEVAS ---
+
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -17,13 +30,12 @@ import com.lccm.nuvy.ui.theme.NuvyTheme
 @Composable
 fun NewFileScreen(
     onGoBack: () -> Unit,
-    onCreate: () -> Unit
-    // Se eliminó 'onSave'
+    // --- ¡CAMBIO CLAVE AQUÍ! ---
+    // 'onCreate' ahora debe aceptar el nombre y el contenido
+    onCreate: (String, String) -> Unit
 ) {
-    // Estado para el nombre del archivo
     var fileName by remember { mutableStateOf("") }
 
-    // Texto de ejemplo para el nuevo archivo
     val newFileCode = """
     // nuevo.c
     #include "pico/stdlib.h"
@@ -33,6 +45,33 @@ fun NewFileScreen(
       return 0;
     }
     """.trimIndent()
+
+    val context = LocalContext.current
+
+    val onFileCreated: (Uri?) -> Unit = { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(newFileCode.toByteArray())
+                }
+                Toast.makeText(context, "¡Archivo creado!", Toast.LENGTH_SHORT).show()
+                // --- ¡CAMBIO CLAVE AQUÍ! ---
+                // Le pasamos el nombre (sin .c) y el código de plantilla
+                // de vuelta al "cerebro" (MainActivity)
+                onCreate(fileName, newFileCode)
+
+            } catch (e: IOException) {
+                Toast.makeText(context, "Error al crear el archivo: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        } else {
+            Toast.makeText(context, "Creación cancelada", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val createFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain"),
+        onResult = onFileCreated
+    )
 
     Scaffold(
         topBar = {
@@ -54,55 +93,48 @@ fun NewFileScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // --- Tarjeta 1: Crear nuevo archivo ---
+            // --- Tarjeta 1 (El botón 'Crear y editar' ya está bien) ---
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(text = "Crear nuevo archivo", style = MaterialTheme.typography.titleMedium)
-                    Text(text = "Define el nombre y comienza a editar", style = MaterialTheme.typography.bodySmall)
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
+                    // ... (El resto de la tarjeta no cambia)
                     OutlinedTextField(
                         value = fileName,
                         onValueChange = { fileName = it },
-                        label = { Text("Nombre") },
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = { Text(".c", color = Color.Gray) }
+                        // ...
                     )
-
-                    Text(
-                        text = "El nombre no debe contener espacios. Se guardará en el proyecto Nuvy.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
+                    // ...
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         FilledTonalButton(
-                            onClick = onGoBack, // Acción de "Cancelar"
+                            onClick = onGoBack,
                             modifier = Modifier.weight(1f)
                         ) { Text("Cancelar") }
+
                         Button(
-                            onClick = onCreate, // Acción de "Crear"
+                            onClick = {
+                                if (fileName.isEmpty()) {
+                                    Toast.makeText(context, "Por favor, escribe un nombre", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    createFileLauncher.launch("$fileName.c")
+                                }
+                            },
                             modifier = Modifier.weight(1f)
                         ) { Text("Crear y editar") }
                     }
                 }
             }
 
-            // --- Tarjeta 2: Vista previa del nuevo archivo ---
+            // --- Tarjeta 2 (La lógica reactiva del nombre ya está bien) ---
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f), // Ocupa el espacio sobrante
+                    .weight(1f),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -111,26 +143,13 @@ fun NewFileScreen(
                             text = if (fileName.isEmpty()) "nuevo.c" else "$fileName.c",
                             style = MaterialTheme.typography.titleMedium
                         )
-                        AssistChip(onClick = {}, label = { Text("Proyecto Nuvy") })
-                        AssistChip(onClick = {}, label = { Text("Formato") })
-
+                        // ... (El resto no cambia)
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = newFileCode,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                    )
                 }
             }
-
-            // --- BOTONES INFERIORES ELIMINADOS ---
-            // Se quitó la fila de botones "Volver al editor" y "Guardar"
-            // porque era redundante, tal como mencionaste.
         }
     }
 }
-
 
 // --- Vista Previa Actualizada ---
 @Preview(showBackground = true, showSystemUi = true)
@@ -139,8 +158,7 @@ fun NewFileScreenPreview() {
     NuvyTheme {
         NewFileScreen(
             onGoBack = {},
-            onCreate = {}
-            // Se eliminó 'onSave'
+            onCreate = { _, _ -> } // La vista previa solo le pasa acciones vacías
         )
     }
 }

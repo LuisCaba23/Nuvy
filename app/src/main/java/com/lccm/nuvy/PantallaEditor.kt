@@ -1,5 +1,11 @@
 package com.lccm.nuvy
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import java.io.IOException
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +18,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -24,12 +31,15 @@ import com.lccm.nuvy.ui.theme.NuvyTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
+    currentFileName: String, // Recibe el nombre
+    codeText: String,        // Recibe el texto
+    onCodeChange: (String) -> Unit, // Reporta cambios en el texto
     onNavigate: (String) -> Unit,
     onOpenFile: () -> Unit,
     onNewFile: () -> Unit,
-    onSave: () -> Unit,
+    onSaveSuccess: () -> Unit, // Reporta el clic en "Guardar"
     onCompile: () -> Unit,
-    onUpload: () -> Unit // <-- 1. AÑADE EL PARÁMETRO DE NUEVO
+    onUpload: () -> Unit
 ) {
     val navigationItems = listOf(NuvyDestinations.HOME, NuvyDestinations.CONNECT, NuvyDestinations.EDITOR)
     val navigationIcons = listOf(
@@ -38,14 +48,7 @@ fun EditorScreen(
         Pair(Icons.Filled.Code, Icons.Outlined.Code)
     )
 
-    // ... (Estados de codeText, selectedTabIndex, etc. no cambian)
-    var codeText by remember {
-        mutableStateOf("// Escribe tu código C aquí...")
-    }
-    var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("main.c", "Build log")
-    val lineNumbers = (1..20).joinToString("\n")
-
+    // Ya no hay lógica de "Guardar" aquí
 
     Scaffold(
         topBar = {
@@ -91,71 +94,33 @@ fun EditorScreen(
                 ) {
                     FilledTonalButton(onClick = onNewFile) { Text("Nueva .c") }
                     FilledTonalButton(onClick = onOpenFile) { Text("Abrir") }
-                    FilledTonalButton(onClick = onSave) { Text("Guardar") }
+                    FilledTonalButton(
+                        onClick = onSaveSuccess // Llama a la acción de guardar del "cerebro"
+                    ) { Text("Guardar") }
                 }
             }
 
-            // --- Pestañas de Archivos ---
-            TabRow(selectedTabIndex = selectedTabIndex) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        text = { Text(title) }
-                    )
-                }
-            }
+            // --- PESTAÑAS ELIMINADAS ---
 
-            // --- Área del Editor de Código ---
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Row(modifier = Modifier.padding(8.dp)) {
-                    Text(
-                        text = lineNumbers,
-                        textAlign = TextAlign.End,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(top = 12.dp, end = 8.dp),
-                        fontFamily = FontFamily.Monospace,
-                        lineHeight = 20.sp
-                    )
-
-                    TextField(
-                        value = codeText,
-                        onValueChange = { codeText = it },
-                        modifier = Modifier.fillMaxSize(),
-                        colors = TextFieldDefaults.colors(
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent
-                        ),
-                        textStyle = LocalTextStyle.current.copy(
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 20.sp
-                        )
-                    )
-                }
-            }
+            // --- Editor de Código (ahora permanente) ---
+            CodeEditorView(
+                modifier = Modifier.weight(1f),
+                codeText = codeText,
+                onCodeChange = onCodeChange
+            )
 
             // --- Botones de Compilar y Subir ---
-            // 2. REVIERTE LOS CAMBIOS AQUÍ
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Button(
-                    onClick = onCompile, // Botón de compilar
+                    onClick = onCompile,
                     modifier = Modifier.weight(1f).height(50.dp),
                     shape = RoundedCornerShape(50)
                 ) {
                     Text("Compilar", fontSize = 16.sp)
                 }
-                // Vuelve a añadir el botón "Subir"
                 FilledTonalButton(
                     onClick = onUpload,
                     modifier = Modifier.weight(1f).height(50.dp),
@@ -168,18 +133,123 @@ fun EditorScreen(
     }
 }
 
-// --- Vista Previa ---
+// --- Pop-up 'NewFileDialog' (Simplificado, solo pide el nombre) ---
+@Composable
+fun NewFileDialog(
+    onDismiss: () -> Unit,
+    onCreate: (String, String) -> Unit
+) {
+    var fileName by remember { mutableStateOf("") }
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Crear nuevo archivo") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Define el nombre y comienza a editar")
+                OutlinedTextField(
+                    value = fileName,
+                    onValueChange = { fileName = it },
+                    label = { Text("Nombre") },
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = { Text(".c", color = Color.Gray) }
+                )
+                Text(
+                    text = "El nombre no debe contener espacios.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (fileName.isEmpty()) {
+                        Toast.makeText(context, "Por favor, escribe un nombre", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val newFileCode = """
+                        // ${fileName}.c
+                        #include "pico/stdlib.h"
+                        
+                        int main() {
+                          printf("Nuevo archivo listo en Nuvy!\n");
+                          return 0;
+                        }
+                        """.trimIndent()
+
+                        // Le pasa el nombre y el código al "cerebro"
+                        onCreate(fileName, newFileCode)
+                    }
+                }
+            ) {
+                Text("Crear y editar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+// --- 'CodeEditorView' ---
+@Composable
+fun CodeEditorView(
+    modifier: Modifier = Modifier,
+    codeText: String,
+    onCodeChange: (String) -> Unit
+) {
+    val lineNumbers = (1..20).joinToString("\n")
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            Text(
+                text = lineNumbers,
+                textAlign = TextAlign.End,
+                color = Color.Gray,
+                modifier = Modifier.padding(top = 12.dp, end = 8.dp),
+                fontFamily = FontFamily.Monospace,
+                lineHeight = 20.sp
+            )
+            TextField(
+                value = codeText,
+                onValueChange = onCodeChange,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                colors = TextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent
+                ),
+                textStyle = LocalTextStyle.current.copy(
+                    fontFamily = FontFamily.Monospace,
+                    lineHeight = 20.sp
+                )
+            )
+        }
+    }
+}
+
+// --- Vista Previa (Actualizada) ---
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun EditorScreenPreview() {
     NuvyTheme {
         EditorScreen(
+            currentFileName = "main.c",
+            codeText = "// Código de ejemplo",
+            onCodeChange = {},
             onNavigate = {},
             onOpenFile = {},
             onNewFile = {},
-            onSave = {},
+            onSaveSuccess = {},
             onCompile = {},
-            onUpload = {} // <-- 3. AÑÁDELO A LA VISTA PREVIA
+            onUpload = {}
         )
     }
 }
