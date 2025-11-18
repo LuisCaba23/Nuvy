@@ -28,7 +28,8 @@ import com.lccm.nuvy.ui.theme.NuvyTheme
 fun FileSavedScreen(
     onNavigate: (String) -> Unit,
     onGoBackToEditor: () -> Unit,
-    onTryAgain: () -> Unit
+    onTryAgain: () -> Unit,
+    fileName: String // <-- 1. AÑADIMOS EL PARÁMETRO
 ) {
     val navigationItems = listOf(NuvyDestinations.HOME, NuvyDestinations.CONNECT, NuvyDestinations.EDITOR)
     val navigationIcons = listOf(
@@ -52,7 +53,7 @@ fun FileSavedScreen(
             NavigationBar {
                 navigationItems.forEachIndexed { index, item ->
                     val icons = navigationIcons[index]
-                    val isSelected = (item == NuvyDestinations.EDITOR) // Sigue en la sección "Editor"
+                    val isSelected = (item == NuvyDestinations.EDITOR)
                     NavigationBarItem(
                         selected = isSelected,
                         onClick = { onNavigate(item) },
@@ -80,7 +81,7 @@ fun FileSavedScreen(
             // --- Icono de Éxito ---
             Surface(
                 shape = CircleShape,
-                color = Color(0xFF4CAF50), // Color verde
+                color = Color(0xFF4CAF50),
                 modifier = Modifier.size(80.dp)
             ) {
                 Icon(
@@ -101,7 +102,8 @@ fun FileSavedScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Tu archivo blinky.c fue guardado y almacenado.",
+                // --- 2. USAMOS EL PARÁMETRO AQUÍ ---
+                text = "Tu archivo $fileName fue guardado y almacenado.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.Gray,
                 textAlign = TextAlign.Center
@@ -114,9 +116,9 @@ fun FileSavedScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                InfoRow(label = "Archivo", value = "blinky.c")
+                // --- 3. USAMOS EL PARÁMETRO AQUÍ ---
+                InfoRow(label = "Archivo", value = fileName)
                 InfoRow(label = "Versión", value = "v1.3 • hace 1 min")
-                // --- CORRECCIÓN APLICADA ---
                 InfoRow(label = "Destino", value = "/Almacenamiento/Nuvy/Proyectos")
             }
 
@@ -150,6 +152,7 @@ fun FileSavedScreen(
     }
 }
 
+// (El Composable InfoRow no cambia)
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row(
@@ -162,7 +165,7 @@ private fun InfoRow(label: String, value: String) {
     }
 }
 
-// --- Vista Previa ---
+// --- Vista Previa (Actualizada) ---
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun FileSavedScreenPreview() {
@@ -170,7 +173,8 @@ fun FileSavedScreenPreview() {
         FileSavedScreen(
             onNavigate = {},
             onGoBackToEditor = {},
-            onTryAgain = {}
+            onTryAgain = {},
+            fileName = "preview.c" // <-- 4. Pasamos un valor de ejemplo
         )
     }
 }

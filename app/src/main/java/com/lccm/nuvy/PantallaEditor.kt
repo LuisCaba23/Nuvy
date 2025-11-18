@@ -1,5 +1,11 @@
 package com.lccm.nuvy
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import java.io.IOException
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -27,41 +33,24 @@ import com.lccm.nuvy.ui.theme.NuvyTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
+    currentFileName: String, // Recibe el nombre
+    codeText: String,        // Recibe el texto
+    onCodeChange: (String) -> Unit, // Reporta cambios en el texto
     onNavigate: (String) -> Unit,
     onOpenFile: () -> Unit,
     onNewFile: () -> Unit,
-    onSave: () -> Unit,
+    onSaveSuccess: () -> Unit, // Reporta el clic en "Guardar"
     onCompile: () -> Unit,
-    onUpload: () -> Unit,
-    viewModel: EditorViewModel
+    onUpload: () -> Unit
 ) {
-    var codeText by remember { mutableStateOf("// Escribe tu código C aquí...") }
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-    var selectedNavIndex by remember { mutableIntStateOf(1) }
-    val tabs = listOf("main.c", "Build log")
+    val navigationItems = listOf(NuvyDestinations.HOME, NuvyDestinations.CONNECT, NuvyDestinations.EDITOR)
+    val navigationIcons = listOf(
+        Pair(Icons.Filled.Home, Icons.Outlined.Home),
+        Pair(Icons.Filled.Link, Icons.Outlined.Link),
+        Pair(Icons.Filled.Code, Icons.Outlined.Code)
+    )
 
-    val compilationState by viewModel.compilationState.collectAsState()
-    val buildLog by viewModel.buildLog.collectAsState()
-    
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    // Mostrar notificación automática cuando se descarga
-    LaunchedEffect(compilationState) {
-        if (compilationState is CompilationState.Success) {
-            val fileName = (compilationState as CompilationState.Success).fileName
-            snackbarHostState.showSnackbar(
-                message = "✅ Descargado: $fileName",
-                duration = SnackbarDuration.Long
-            )
-            viewModel.resetState()
-        } else if (compilationState is CompilationState.Error) {
-            val error = compilationState as CompilationState.Error
-            snackbarHostState.showSnackbar(
-                message = "❌ Error: ${error.message}",
-                duration = SnackbarDuration.Long
-            )
-        }
-    }
+    // Ya no hay lógica de "Guardar" aquí
 
     Scaffold(
         topBar = { CenterAlignedTopAppBar(title = { Text("Editor de código") }) },
@@ -129,113 +118,32 @@ fun EditorScreen(
                         .padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    FilledTonalButton(onClick = onNewFile) { Text("Nueva .c") }
+                    FilledTonalButton(onClick = onOpenFile) { Text("Abrir") }
                     FilledTonalButton(
-                        onClick = onNewFile,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Nueva .c")
-                    }
-                    FilledTonalButton(
-                        onClick = onOpenFile,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Abrir")
-                    }
-                    FilledTonalButton(
-                        onClick = onSave,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Guardar")
-                    }
+                        onClick = onSaveSuccess // Llama a la acción de guardar del "cerebro"
+                    ) { Text("Guardar") }
                 }
             }
 
-            // Pestañas
-            TabRow(selectedTabIndex = selectedTabIndex) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        text = { Text(title) }
-                    )
-                }
-            }
+            // --- PESTAÑAS ELIMINADAS ---
 
-            // Editor o Build Log
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                if (selectedTabIndex == 0) {
-                    // Editor de código
-                    Row(modifier = Modifier.padding(8.dp)) {
-                        // Números de línea
-                        Column(
-                            modifier = Modifier
-                                .padding(end = 8.dp)
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            val lineCount = codeText.count { it == '\n' } + 1
-                            (1..lineCount).forEach { lineNumber ->
-                                Text(
-                                    text = "$lineNumber",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontFamily = FontFamily.Monospace,
-                                    textAlign = TextAlign.End,
-                                    modifier = Modifier.width(30.dp)
-                                )
-                            }
-                        }
-                        
-                        // Editor de texto
-                        TextField(
-                            value = codeText,
-                            onValueChange = { codeText = it },
-                            modifier = Modifier.fillMaxSize(),
-                            textStyle = LocalTextStyle.current.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 14.sp
-                            ),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            )
-                        )
-                    }
-                } else {
-                    // Build log
-                    Text(
-                        text = buildLog.ifEmpty { "Sin actividad de compilación" },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                            .verticalScroll(rememberScrollState()),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
+            // --- Editor de Código (ahora permanente) ---
+            CodeEditorView(
+                modifier = Modifier.weight(1f),
+                codeText = codeText,
+                onCodeChange = onCodeChange
+            )
 
-            // Botones de acción
+            // --- Botones de Compilar y Subir ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Button(
-                    onClick = {
-                        selectedTabIndex = 1 // Cambiar a Build log
-                        viewModel.compileCode(codeText)
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp),
-                    enabled = compilationState !is CompilationState.Compiling
+                    onClick = onCompile,
+                    modifier = Modifier.weight(1f).height(50.dp),
+                    shape = RoundedCornerShape(50)
                 ) {
                     if (compilationState is CompilationState.Compiling) {
                         CircularProgressIndicator(
@@ -246,7 +154,6 @@ fun EditorScreen(
                         Text("Compilar")
                     }
                 }
-
                 FilledTonalButton(
                     onClick = onUpload,
                     modifier = Modifier
@@ -260,18 +167,123 @@ fun EditorScreen(
     }
 }
 
+// --- Pop-up 'NewFileDialog' (Simplificado, solo pide el nombre) ---
+@Composable
+fun NewFileDialog(
+    onDismiss: () -> Unit,
+    onCreate: (String, String) -> Unit
+) {
+    var fileName by remember { mutableStateOf("") }
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Crear nuevo archivo") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Define el nombre y comienza a editar")
+                OutlinedTextField(
+                    value = fileName,
+                    onValueChange = { fileName = it },
+                    label = { Text("Nombre") },
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = { Text(".c", color = Color.Gray) }
+                )
+                Text(
+                    text = "El nombre no debe contener espacios.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (fileName.isEmpty()) {
+                        Toast.makeText(context, "Por favor, escribe un nombre", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val newFileCode = """
+                        // ${fileName}.c
+                        #include "pico/stdlib.h"
+                        
+                        int main() {
+                          printf("Nuevo archivo listo en Nuvy!\n");
+                          return 0;
+                        }
+                        """.trimIndent()
+
+                        // Le pasa el nombre y el código al "cerebro"
+                        onCreate(fileName, newFileCode)
+                    }
+                }
+            ) {
+                Text("Crear y editar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+// --- 'CodeEditorView' ---
+@Composable
+fun CodeEditorView(
+    modifier: Modifier = Modifier,
+    codeText: String,
+    onCodeChange: (String) -> Unit
+) {
+    val lineNumbers = (1..20).joinToString("\n")
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            Text(
+                text = lineNumbers,
+                textAlign = TextAlign.End,
+                color = Color.Gray,
+                modifier = Modifier.padding(top = 12.dp, end = 8.dp),
+                fontFamily = FontFamily.Monospace,
+                lineHeight = 20.sp
+            )
+            TextField(
+                value = codeText,
+                onValueChange = onCodeChange,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                colors = TextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent
+                ),
+                textStyle = LocalTextStyle.current.copy(
+                    fontFamily = FontFamily.Monospace,
+                    lineHeight = 20.sp
+                )
+            )
+        }
+    }
+}
+
+// --- Vista Previa (Actualizada) ---
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun EditorScreenPreview() {
     NuvyTheme {
         EditorScreen(
+            currentFileName = "main.c",
+            codeText = "// Código de ejemplo",
+            onCodeChange = {},
             onNavigate = {},
             onOpenFile = {},
             onNewFile = {},
-            onSave = {},
+            onSaveSuccess = {},
             onCompile = {},
-            onUpload = {},
-            viewModel = EditorViewModel()
+            onUpload = {}
         )
     }
 }

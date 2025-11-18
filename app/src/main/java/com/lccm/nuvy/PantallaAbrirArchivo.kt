@@ -1,8 +1,14 @@
 package com.lccm.nuvy
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,13 +31,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lccm.nuvy.ui.theme.NuvyTheme
 
+// --- ESTRUCTURA DE DATOS (NO PRIVADA) ---
+// MainActivity necesita ver esto
+data class FileListItem(
+    val name: String,
+    val details: String,
+    val isFolder: Boolean = false,
+    val tag: String? = ".c"
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OpenFileScreen(
     onNavigate: (String) -> Unit,
     onOpen: () -> Unit,
-    onImport: () -> Unit,
-    onFileClick: () -> Unit // Parámetro para manejar el clic en un archivo
+    // 'onFileClick' ahora pasa el FileListItem completo
+    onFileClick: (FileListItem) -> Unit,
+    files: List<FileListItem>, // Recibe la lista desde el "cerebro"
+    onFileImported: (Uri) -> Unit // Reporta un archivo importado
 ) {
     val navigationItems = listOf(NuvyDestinations.HOME, NuvyDestinations.CONNECT, NuvyDestinations.EDITOR)
     val navigationIcons = listOf(
@@ -41,6 +58,33 @@ fun OpenFileScreen(
     )
 
     var searchQuery by remember { mutableStateOf("") }
+
+    // Filtra la lista 'files' que viene de MainActivity
+    val filteredList = remember(searchQuery, files) {
+        if (searchQuery.isEmpty()) {
+            files
+        } else {
+            files.filter {
+                it.name.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
+    val context = LocalContext.current
+
+    // Lógica de importación
+    val onFileSelected: (Uri?) -> Unit = { uri ->
+        if (uri != null) {
+            onFileImported(uri)
+        } else {
+            Toast.makeText(context, "Importación cancelada", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = onFileSelected
+    )
 
     Scaffold(
         topBar = {
@@ -95,60 +139,31 @@ fun OpenFileScreen(
                 )
             }
 
-            // --- Sección de Recientes ---
+            // --- Título ---
             item {
                 Text(
-                    text = "Recientes",
+                    text = "Archivos",
                     style = MaterialTheme.typography.titleMedium
-                )
-            }
-            item {
-                FileItem(
-                    name = "blinky.c",
-                    details = "Modificado hace 2 días • 1.2 KB • Local",
-                    iconColor = MaterialTheme.colorScheme.surfaceVariant,
-                    onClick = onFileClick // Pasa la acción de clic
-                )
-            }
-            item {
-                FileItem(
-                    name = "wifi_setup.c",
-                    details = "Modificado hoy • 3.8 KB • Nube",
-                    iconColor = MaterialTheme.colorScheme.surfaceVariant,
-                    onClick = onFileClick // Pasa la acción de clic
-                )
-            }
-            item {
-                FileItem(
-                    name = "pwm_driver.c",
-                    details = "Modificado hace 5 h • 6.1 KB • Local",
-                    iconColor = MaterialTheme.colorScheme.surfaceVariant,
-                    onClick = onFileClick // Pasa la acción de clic
                 )
             }
 
-            // --- Sección de Carpetas ---
-            item {
-                Text(
-                    text = "Carpetas",
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-            item {
-                FolderItem(
-                    name = "/Proyectos/pico/",
-                    details = "12 archivos • Local",
-                    iconColor = MaterialTheme.colorScheme.surfaceVariant,
-                    onClick = { /* TODO: Navegar a carpeta */ }
-                )
-            }
-            item {
-                FolderItem(
-                    name = "/Nuvy Cloud/",
-                    details = "8 archivos • Nube",
-                    iconColor = MaterialTheme.colorScheme.surfaceVariant,
-                    onClick = { /* TODO: Navegar a carpeta */ }
-                )
+            // --- Lista de Archivos (desde 'filteredList') ---
+            items(filteredList) { fileItem ->
+                if (fileItem.isFolder) {
+                    FolderItem(
+                        name = fileItem.name,
+                        details = fileItem.details,
+                        iconColor = MaterialTheme.colorScheme.surfaceVariant,
+                        onClick = { /* TODO: Navegar a carpeta */ }
+                    )
+                } else {
+                    FileItem(
+                        name = fileItem.name,
+                        details = fileItem.details,
+                        iconColor = MaterialTheme.colorScheme.surfaceVariant,
+                        onClick = { onFileClick(fileItem) } // Pasa el 'fileItem'
+                    )
+                }
             }
 
             // --- Botones Inferiores ---
@@ -160,7 +175,10 @@ fun OpenFileScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     FilledTonalButton(
-                        onClick = onImport,
+                        onClick = {
+                            val mimeTypes = arrayOf("text/plain", "text/x-c", "application/octet-stream")
+                            filePickerLauncher.launch(mimeTypes)
+                        },
                         modifier = Modifier
                             .weight(1f)
                             .height(50.dp),
@@ -183,15 +201,14 @@ fun OpenFileScreen(
     }
 }
 
-// --- Componentes de Ayuda (Actualizados con onClick) ---
-
-@OptIn(ExperimentalMaterial3Api::class) // Necesario para Card clicable
+// --- COMPONENTES DE AYUDA (NO PRIVADOS) ---
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileItem(name: String, details: String, iconColor: Color, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        onClick = onClick // <-- Tarjeta clicable
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -223,13 +240,13 @@ fun FileItem(name: String, details: String, iconColor: Color, onClick: () -> Uni
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class) // Necesario para Card clicable
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FolderItem(name: String, details: String, iconColor: Color, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        onClick = onClick // <-- Tarjeta clicable
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -258,8 +275,12 @@ fun OpenFileScreenPreview() {
         OpenFileScreen(
             onNavigate = {},
             onOpen = {},
-            onImport = {},
-            onFileClick = {} // Parámetro añadido para la vista previa
+            onFileClick = {},
+            files = listOf(
+                FileListItem(name = "preview_file.c", details = "Preview details"),
+                FileListItem(name = "/PreviewFolder/", details = "Preview folder", isFolder = true)
+            ),
+            onFileImported = {}
         )
     }
 }
