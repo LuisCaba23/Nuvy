@@ -1,22 +1,21 @@
 package com.lccm.nuvy
 
 import android.os.Bundle
+import android.os.Environment
 import android.widget.Toast
-import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -27,53 +26,12 @@ import com.lccm.nuvy.ui.theme.NuvyTheme
 import java.io.File
 import java.io.FileOutputStream
 
-// --- "BASE DE DATOS" DE ARCHIVOS (Definida una vez) ---
-val allFiles = listOf(
-    FileListItem(name = "blinky.c", details = "Modificado hace 2 días • 1.2 KB • Local"),
-    FileListItem(name = "wifi_setup.c", details = "Modificado hoy • 3.8 KB • Nube"),
-    FileListItem(name = "pwm_driver.c", details = "Modificado hace 5 h • 6.1 KB • Local"),
-    FileListItem(name = "/Proyectos/pico/", details = "12 archivos • Local", isFolder = true, tag = null),
-    FileListItem(name = "/Nuvy Cloud/", details = "8 archivos • Nube", isFolder = true, tag = null)
-)
-
-// --- "BASE DE DATOS" DE CONTENIDO (Mutable) ---
-var fileContentDatabase = mapOf(
-    "blinky.c" to """
-    // Archivo: blinky.c
-    #include "pico/stdlib.h"
-    
-    int main() {
-      const uint LED_PIN = 25;
-      gpio_init(LED_PIN);
-      gpio_set_dir(LED_PIN, GPIO_OUT);
-      while (true) {
-        gpio_put(LED_PIN, 1);
-        sleep_ms(250);
-        gpio_put(LED_PIN, 0);
-        sleep_ms(250);
-      }
-    }
-    """.trimIndent(),
-    "wifi_setup.c" to """
-    // Archivo: wifi_setup.c
-    #include "pico/stdlib.h"
-    
-    int main() {
-      // Lógica de WiFi...
-      printf("WiFi conectado!\n");
-    }
-    """.trimIndent(),
-    "pwm_driver.c" to """
-    // Archivo: pwm_driver.c
-    #include "pico/stdlib.h"
-    
-    int main() {
-      // Lógica de PWM...
-    }
-    """.trimIndent()
-)
-
 class MainActivity : ComponentActivity() {
+
+    // Estado global del archivo actual
+    private var currentFileName = mutableStateOf("Unnamed.c")
+    private var currentCode = mutableStateOf("// Escribe tu código C aquí...")
+    private var filesList = mutableStateOf<List<FileListItem>>(emptyList())
 
     private fun saveFileToDownloads(data: ByteArray, fileName: String) {
         try {
@@ -102,227 +60,209 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun saveCodeFile(fileName: String, code: String) {
+        try {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = File(downloadsDir, "$fileName.c")
+
+            file.writeText(code)
+
+            currentFileName.value = "$fileName.c"
+            
+            // Actualizar la lista de archivos
+            loadFilesFromDownloads()
+
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "✅ Archivo guardado: $fileName.c",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        } catch (e: Exception) {
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "❌ Error al guardar: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun loadFilesFromDownloads() {
+        try {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val files = downloadsDir.listFiles()?.filter { it.extension == "c" } ?: emptyList()
+            
+            filesList.value = files.map { file ->
+                FileListItem(
+                    name = file.name,
+                    details = "Tamaño: ${file.length()} bytes • Modificado: ${java.text.SimpleDateFormat("dd/MM/yyyy").format(file.lastModified())}",
+                    isFolder = false,
+                    tag = ".c"
+                )
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error al cargar archivos: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openFile(fileItem: FileListItem) {
+        try {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = File(downloadsDir, fileItem.name)
+            
+            if (file.exists()) {
+                currentCode.value = file.readText()
+                currentFileName.value = fileItem.name
+                
+                Toast.makeText(
+                    this,
+                    "📂 Abriendo: ${fileItem.name}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error al abrir archivo: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Cargar archivos al inicio
+        loadFilesFromDownloads()
+        
         setContent {
             NuvyTheme {
-                // --- ESTADOS ---
-                var currentScreen by remember { mutableStateOf(NuvyDestinations.HOME) }
-                var currentFileName by remember { mutableStateOf("main.c") }
-                var editorCode by remember { mutableStateOf("// Escribe tu código C aquí...") }
-                var showNewFileDialog by remember { mutableStateOf(false) }
-                var fileList by remember { mutableStateOf(allFiles) }
-
-                val navigateTo: (String) -> Unit = { screen ->
-                    currentScreen = screen
-                }
-
-                when (currentScreen) {
-
-                    NuvyDestinations.HOME, NuvyDestinations.CONNECT -> {
-                        NuvyScreen(
-                            onConnectClicked = { navigateTo(NuvyDestinations.CONNECT_DEVICE) },
-                            onEditorClicked = { navigateTo(NuvyDestinations.EDITOR) }
-                        )
+                val navController = rememberNavController()
+                val viewModel: EditorViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            @Suppress("UNCHECKED_CAST")
+                            return EditorViewModel(
+                                onDownloadFile = { data, fileName ->
+                                    saveFileToDownloads(data, fileName)
+                                }
+                            ) as T
+                        }
                     }
                 )
 
-                    NuvyDestinations.EDITOR -> {
-                        EditorScreen(
-                            currentFileName = currentFileName,
-                            codeText = editorCode,
-                            onCodeChange = { editorCode = it },
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onOpenFile = { navigateTo(NuvyDestinations.OPEN_FILE) },
-                            onSaveSuccess = {
-                                fileContentDatabase = fileContentDatabase.toMutableMap().apply {
-                                    set(currentFileName, editorCode)
-                                }
-                                navigateTo(NuvyDestinations.FILE_SAVED)
-                            },
-                            onCompile = { navigateTo(NuvyDestinations.BUILD_PROCESS) },
-                            onUpload = { navigateTo(NuvyDestinations.OPEN_FILE) },
-                            onNewFile = { showNewFileDialog = true }
-                        )
-
-                        if (showNewFileDialog) {
-                            NewFileDialog(
-                                onDismiss = { showNewFileDialog = false },
-                                onCreate = { newName, newContent ->
-                                    val fullFileName = "$newName.c"
-                                    currentFileName = fullFileName
-                                    editorCode = newContent
-
-                                    fileContentDatabase = fileContentDatabase.toMutableMap().apply {
-                                        set(fullFileName, newContent)
-                                    }
-                                    fileList = listOf(FileListItem(fullFileName, "Creado ahora • Local", false)) + fileList
-
-                                    showNewFileDialog = false
-                                }
-                            )
-                        }
-                    }
-
-                    NuvyDestinations.OPEN_FILE -> {
-                        OpenFileScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onOpen = { /*TODO*/ },
-                            files = fileList,
-                            onFileImported = { uri ->
-
-                                var importedFileName = "archivo.c"
-                                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                                    if (cursor.moveToFirst()) {
-                                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                                        if (nameIndex != -1) {
-                                            importedFileName = cursor.getString(nameIndex)
-                                        }
-                                    }
-                                }
-
-                                val newFile = FileListItem(
-                                    name = importedFileName,
-                                    details = "Importado hoy • Local",
-                                    isFolder = false
+                NavHost(navController = navController, startDestination = "nuvy") {
+                    composable("nuvy") {
+                        // Pantalla temporal hasta que implementes NuvyScreen
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Text(
+                                    text = "🚧 En Desarrollo",
+                                    style = MaterialTheme.typography.headlineMedium
                                 )
 
-                                fileList = listOf(newFile) + fileList
+                                Button(onClick = {
+                                    navController.navigate("editor")
+                                }) {
+                                    Text("Ir al Editor")
+                                }
 
-                                Toast.makeText(this, "$importedFileName importado", Toast.LENGTH_SHORT).show()
+                                Button(onClick = {
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "🚧 Función de conexión en desarrollo",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }) {
+                                    Text("Conectar (Próximamente)")
+                                }
+                            }
+                        }
+                    }
+                    
+                    composable("editor") {
+                        EditorScreen(
+                            currentFileName = currentFileName.value,
+                            codeText = currentCode.value,
+                            onCodeChange = { currentCode.value = it },
+                            onNavigate = { route ->
+                                when (route) {
+                                    "home" -> navController.navigate("nuvy")
+                                    "openFile" -> navController.navigate("openFile")
+                                    "fileSaved" -> navController.navigate("fileSaved")
+                                }
                             },
+                            onOpenFile = { navController.navigate("openFile") },
+                            onNewFile = { fileName, code ->
+                                currentFileName.value = "$fileName.c"
+                                currentCode.value = code
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "📝 Trabajando en: $fileName.c",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            },
+                            onSaveFile = { fileName ->
+                                saveCodeFile(fileName, currentCode.value)
+                                navController.navigate("fileSaved")
+                            },
+                            onCompile = {
+                                viewModel.compileCode(currentCode.value, currentFileName.value)
+                            },
+                            onUpload = { /* TODO: Implementar subir a Pico */ },
+                            viewModel = viewModel
+                        )
+                    }
+                    
+                    composable("openFile") {
+                        OpenFileScreen(
+                            onNavigate = { route ->
+                                when (route) {
+                                    NuvyDestinations.HOME -> navController.navigate("nuvy")
+                                    NuvyDestinations.EDITOR -> navController.navigate("editor")
+                                }
+                            },
+                            onOpen = { navController.navigate("editor") },
                             onFileClick = { fileItem ->
-                                currentFileName = fileItem.name
-                                editorCode = fileContentDatabase[fileItem.name] ?: "// Contenido no encontrado"
-                                navigateTo(NuvyDestinations.FILE_PREVIEW)
+                                openFile(fileItem)
+                                navController.navigate("editor")
+                            },
+                            files = filesList.value,
+                            onFileImported = { uri ->
+                                try {
+                                    val inputStream = contentResolver.openInputStream(uri)
+                                    val code = inputStream?.bufferedReader()?.readText() ?: ""
+                                    currentCode.value = code
+                                    currentFileName.value = uri.lastPathSegment ?: "Unnamed.c"
+                                    navController.navigate("editor")
+                                    Toast.makeText(this@MainActivity, "Archivo importado", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         )
                     }
-
-                    NuvyDestinations.FILE_PREVIEW -> {
-                        FilePreviewScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            fileName = currentFileName,
-                            fileContent = editorCode,
-                            onEdit = { navigateTo(NuvyDestinations.EDITOR) },
-                            onCancel = { navigateTo(NuvyDestinations.OPEN_FILE) }
-                        )
-                    }
-
-                    NuvyDestinations.CONNECT_DEVICE -> {
-                        ConnectDeviceScreen(
-                            onPermitAccess = { navigateTo(NuvyDestinations.ACCESS_GRANTED) },
-                            onTryAgain = {},
-                            onNavigate = { screenName -> navigateTo(screenName) }
-                        )
-                    }
-                    NuvyDestinations.ACCESS_GRANTED -> {
-                        AccessGrantedScreen(
-                            onContinueClicked = { navigateTo(NuvyDestinations.UPLOAD_PROGRESS) },
-                            onNavigate = { screenName -> navigateTo(screenName) }
-                        )
-                    }
-                    NuvyDestinations.FILE_SAVED -> {
+                    
+                    composable("fileSaved") {
                         FileSavedScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoBackToEditor = { navigateTo(NuvyDestinations.EDITOR) },
-                            onTryAgain = { /*TODO*/ },
-                            fileName = currentFileName
-                        )
-                    }
-                    NuvyDestinations.BUILD_PROCESS -> {
-                        BuildScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoBack = { navigateTo(NuvyDestinations.EDITOR) },
-                            onCancelBuild = { navigateTo(NuvyDestinations.EDITOR) },
-                            onBuildComplete = { navigateTo(NuvyDestinations.DOWNLOAD_READY) }
-                        )
-                    }
-                    NuvyDestinations.DOWNLOAD_READY -> {
-                        DownloadReadyScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoBack = { navigateTo(NuvyDestinations.EDITOR) },
-                            onUpload = { navigateTo(NuvyDestinations.CONNECT_DEVICE) },
-                            onSave = { /*TODO: Lógica de guardado*/ }
-                        )
-                    }
-
-                    // --- AQUÍ ESTABA EL ERROR (TEXTO EXTRA ELIMINADO) ---
-
-                    NuvyDestinations.UPLOAD_PROGRESS -> {
-                        UploadScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoBack = { navigateTo(NuvyDestinations.EDITOR) },
-                            onCancelUpload = { navigateTo(NuvyDestinations.EDITOR) },
-                            onUploadFinished = { navigateTo(NuvyDestinations.UPLOAD_COMPLETE) }
-                        )
-                    }
-                    NuvyDestinations.UPLOAD_COMPLETE -> {
-                        UploadCompleteScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoBack = { navigateTo(NuvyDestinations.EDITOR) },
-                            onFinalize = { navigateTo(NuvyDestinations.HOME) }
+                            onNavigate = { route ->
+                                when (route) {
+                                    NuvyDestinations.HOME -> navController.navigate("nuvy")
+                                    NuvyDestinations.EDITOR -> navController.navigate("editor")
+                                }
+                            },
+                            onGoBackToEditor = { navController.navigate("editor") },
+                            onTryAgain = { navController.navigate("editor") },
+                            fileName = currentFileName.value
                         )
                     }
                 }
             }
         }
-    }
-}
-
-// =================================================================================
-// PANTALLA 1: NuvyScreen (Esta parte no cambia)
-// =================================================================================
-@Composable
-fun NuvyScreen(
-    onConnectClicked: () -> Unit,
-    onEditorClicked: () -> Unit
-) {
-    Scaffold { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 32.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = "Nuvy", fontSize = 48.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Edita un archivo .c, súbelo a la nube y recibirás un archivo .uf2.",
-                textAlign = TextAlign.Center,
-                fontSize = 16.sp,
-                color = Color.Gray
-            )
-            Spacer(modifier = Modifier.height(48.dp))
-            Button(
-                onClick = onConnectClicked,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(50)
-            ) {
-                Text(text = "Conectar por cable", fontSize = 16.sp)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedButton(
-                onClick = onEditorClicked,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(50)
-            ) {
-                Text(text = "Ir al editor", fontSize = 16.sp)
-            }
-        }
-    }
-}
-
-// --- Vista Previa (No cambia) ---
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun NuvyScreenPreview() {
-    NuvyTheme {
-        NuvyScreen(
-            onConnectClicked = {},
-            onEditorClicked = {}
-        )
     }
 }
