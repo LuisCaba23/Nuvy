@@ -29,7 +29,7 @@ fun FileSavedScreen(
     onNavigate: (String) -> Unit,
     onGoBackToEditor: () -> Unit,
     onTryAgain: () -> Unit,
-    fileName: String // <-- 1. AÑADIMOS EL PARÁMETRO
+    fileName: String
 ) {
     val navigationItems = listOf(NuvyDestinations.HOME, NuvyDestinations.CONNECT, NuvyDestinations.EDITOR)
     val navigationIcons = listOf(
@@ -102,7 +102,6 @@ fun FileSavedScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                // --- 2. USAMOS EL PARÁMETRO AQUÍ ---
                 text = "Tu archivo $fileName fue guardado y almacenado.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.Gray,
@@ -116,43 +115,26 @@ fun FileSavedScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // --- 3. USAMOS EL PARÁMETRO AQUÍ ---
                 InfoRow(label = "Archivo", value = fileName)
-                InfoRow(label = "Versión", value = "v1.3 • hace 1 min")
-                InfoRow(label = "Destino", value = "/Almacenamiento/Nuvy/Proyectos")
+                InfoRow(label = "Destino", value = "Almacenamiento/Descargas")
             }
 
-            // Spacer para empujar los botones hacia abajo
+            // Spacer para empujar el botón hacia abajo
             Spacer(modifier = Modifier.weight(1f))
 
-            // --- Botones de Acción ---
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            // --- Botón de Acción ---
+            Button(
+                onClick = onGoBackToEditor,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
             ) {
-                Button(
-                    onClick = onTryAgain,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                ) {
-                    Text("Probar de nuevo", fontSize = 16.sp)
-                }
-                FilledTonalButton(
-                    onClick = onGoBackToEditor,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                ) {
-                    Text("Volver al editor", fontSize = 16.sp)
-                }
+                Text("Volver al editor", fontSize = 16.sp)
             }
         }
     }
 }
 
-// (El Composable InfoRow no cambia)
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row(
@@ -165,7 +147,6 @@ private fun InfoRow(label: String, value: String) {
     }
 }
 
-// --- Vista Previa (Actualizada) ---
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun FileSavedScreenPreview() {
@@ -174,7 +155,7 @@ fun FileSavedScreenPreview() {
             onNavigate = {},
             onGoBackToEditor = {},
             onTryAgain = {},
-            fileName = "preview.c" // <-- 4. Pasamos un valor de ejemplo
+            fileName = "preview.c"
         )
     }
 }

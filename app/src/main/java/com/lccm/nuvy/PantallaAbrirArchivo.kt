@@ -45,10 +45,9 @@ data class FileListItem(
 fun OpenFileScreen(
     onNavigate: (String) -> Unit,
     onOpen: () -> Unit,
-    // 'onFileClick' ahora pasa el FileListItem completo
     onFileClick: (FileListItem) -> Unit,
-    files: List<FileListItem>, // Recibe la lista desde el "cerebro"
-    onFileImported: (Uri) -> Unit // Reporta un archivo importado
+    files: List<FileListItem>,
+    onFileImported: (Uri) -> Unit
 ) {
     val navigationItems = listOf(NuvyDestinations.HOME, NuvyDestinations.CONNECT, NuvyDestinations.EDITOR)
     val navigationIcons = listOf(
@@ -59,7 +58,6 @@ fun OpenFileScreen(
 
     var searchQuery by remember { mutableStateOf("") }
 
-    // Filtra la lista 'files' que viene de MainActivity
     val filteredList = remember(searchQuery, files) {
         if (searchQuery.isEmpty()) {
             files
@@ -72,7 +70,6 @@ fun OpenFileScreen(
 
     val context = LocalContext.current
 
-    // Lógica de importación
     val onFileSelected: (Uri?) -> Unit = { uri ->
         if (uri != null) {
             onFileImported(uri)
@@ -137,150 +134,4 @@ fun OpenFileScreen(
                     onClick = { /*TODO*/ },
                     label = { Text("Archivos locales") }
                 )
-            }
-
-            // --- Título ---
-            item {
-                Text(
-                    text = "Archivos",
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-
-            // --- Lista de Archivos (desde 'filteredList') ---
-            items(filteredList) { fileItem ->
-                if (fileItem.isFolder) {
-                    FolderItem(
-                        name = fileItem.name,
-                        details = fileItem.details,
-                        iconColor = MaterialTheme.colorScheme.surfaceVariant,
-                        onClick = { /* TODO: Navegar a carpeta */ }
-                    )
-                } else {
-                    FileItem(
-                        name = fileItem.name,
-                        details = fileItem.details,
-                        iconColor = MaterialTheme.colorScheme.surfaceVariant,
-                        onClick = { onFileClick(fileItem) } // Pasa el 'fileItem'
-                    )
-                }
-            }
-
-            // --- Botones Inferiores ---
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp, bottom = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    FilledTonalButton(
-                        onClick = {
-                            val mimeTypes = arrayOf("text/plain", "text/x-c", "application/octet-stream")
-                            filePickerLauncher.launch(mimeTypes)
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(50)
-                    ) {
-                        Text("Importar", fontSize = 16.sp)
-                    }
-                    Button(
-                        onClick = onOpen,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(50)
-                    ) {
-                        Text("Abrir", fontSize = 16.sp)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// --- COMPONENTES DE AYUDA (NO PRIVADOS) ---
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FileItem(name: String, details: String, iconColor: Color, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(iconColor)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(text = details, color = Color.Gray, fontSize = 12.sp)
-            }
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface
-            ) {
-                Text(
-                    text = ".c",
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    fontSize = 12.sp
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FolderItem(name: String, details: String, iconColor: Color, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(iconColor)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(text = details, color = Color.Gray, fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-// --- Vista Previa ---
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun OpenFileScreenPreview() {
-    NuvyTheme {
-        OpenFileScreen(
-            onNavigate = {},
-            onOpen = {},
-            onFileClick = {},
-            files = listOf(
-                FileListItem(name = "preview_file.c", details = "Preview details"),
-                FileListItem(name = "/PreviewFolder/", details = "Preview folder", isFolder = true)
-            ),
-            onFileImported = {}
-        )
-    }
-}
+            }}}}
