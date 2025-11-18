@@ -8,6 +8,8 @@ import androidx.compose.ui.platform.LocalContext
 import java.io.IOException
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
@@ -51,26 +53,49 @@ fun EditorScreen(
     // Ya no hay lógica de "Guardar" aquí
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(title = { Text("Editor de código") })
-        },
+        topBar = { CenterAlignedTopAppBar(title = { Text("Editor de código") }) },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             NavigationBar {
-                navigationItems.forEachIndexed { index, item ->
-                    val icons = navigationIcons[index]
-                    val isSelected = (item == NuvyDestinations.EDITOR)
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { onNavigate(item) },
-                        label = { Text(text = item) },
-                        icon = {
-                            Icon(
-                                imageVector = if (isSelected) icons.first else icons.second,
-                                contentDescription = item
-                            )
-                        }
-                    )
-                }
+                NavigationBarItem(
+                    selected = selectedNavIndex == 0,
+                    onClick = {
+                        selectedNavIndex = 0
+                        onNavigate("home")
+                    },
+                    icon = {
+                        Icon(
+                            if (selectedNavIndex == 0) Icons.Filled.Home else Icons.Outlined.Home,
+                            contentDescription = "Inicio"
+                        )
+                    },
+                    label = { Text("Inicio") }
+                )
+                NavigationBarItem(
+                    selected = selectedNavIndex == 1,
+                    onClick = { selectedNavIndex = 1 },
+                    icon = {
+                        Icon(
+                            if (selectedNavIndex == 1) Icons.Filled.Code else Icons.Outlined.Code,
+                            contentDescription = "Editor"
+                        )
+                    },
+                    label = { Text("Editor") }
+                )
+                NavigationBarItem(
+                    selected = selectedNavIndex == 2,
+                    onClick = { 
+                        selectedNavIndex = 2
+                        // Por ahora no navega a ningún lado, puedes agregar funcionalidad después
+                    },
+                    icon = {
+                        Icon(
+                            if (selectedNavIndex == 2) Icons.Filled.Link else Icons.Outlined.Link,
+                            contentDescription = "Conexión"
+                        )
+                    },
+                    label = { Text("Conexión") }
+                )
             }
         }
     ) { paddingValues ->
@@ -81,16 +106,17 @@ fun EditorScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-
-            // --- Fila de botones superior ---
+            // Botones superiores
             Surface(
-                shape = RoundedCornerShape(50),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceAround
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilledTonalButton(onClick = onNewFile) { Text("Nueva .c") }
                     FilledTonalButton(onClick = onOpenFile) { Text("Abrir") }
@@ -119,14 +145,22 @@ fun EditorScreen(
                     modifier = Modifier.weight(1f).height(50.dp),
                     shape = RoundedCornerShape(50)
                 ) {
-                    Text("Compilar", fontSize = 16.sp)
+                    if (compilationState is CompilationState.Compiling) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("Compilar")
+                    }
                 }
                 FilledTonalButton(
                     onClick = onUpload,
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    shape = RoundedCornerShape(50)
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp)
                 ) {
-                    Text("Subir", fontSize = 16.sp)
+                    Text("Subir")
                 }
             }
         }

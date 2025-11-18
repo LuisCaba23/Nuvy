@@ -7,13 +7,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,7 +17,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.lccm.nuvy.ui.theme.NuvyTheme
+import java.io.File
+import java.io.FileOutputStream
 
 // --- "BASE DE DATOS" DE ARCHIVOS (Definida una vez) ---
 val allFiles = listOf(
@@ -73,6 +74,34 @@ var fileContentDatabase = mapOf(
 )
 
 class MainActivity : ComponentActivity() {
+
+    private fun saveFileToDownloads(data: ByteArray, fileName: String) {
+        try {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = File(downloadsDir, fileName)
+
+            FileOutputStream(file).use { fos ->
+                fos.write(data)
+            }
+
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "✅ Archivo guardado en Descargas/$fileName",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        } catch (e: Exception) {
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "❌ Error al guardar: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -96,6 +125,7 @@ class MainActivity : ComponentActivity() {
                             onEditorClicked = { navigateTo(NuvyDestinations.EDITOR) }
                         )
                     }
+                )
 
                     NuvyDestinations.EDITOR -> {
                         EditorScreen(

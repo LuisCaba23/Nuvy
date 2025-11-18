@@ -46,9 +46,19 @@ android {
 }
 
 dependencies {
+
+    // OkHttp para requests HTTP
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Coroutines para operaciones asíncronas
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
     // Dependencias básicas de KTX y Lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+
+    // ✅ ¡AQUÍ! Agrega esta línea para conectar ViewModel con Compose
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")
 
     // ✅ NUEVO: Dependencia para integrar Compose en una Actividad
     implementation(libs.androidx.activity.compose)
@@ -65,6 +75,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
 
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.navigation.compose.android)
     // 🗑️ ELIMINADAS: Estas ya no son necesarias para una app 100% Compose
     // implementation(libs.androidx.appcompat)
     // implementation(libs.material)
