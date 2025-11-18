@@ -1,17 +1,12 @@
 package com.lccm.nuvy
 
 import android.os.Bundle
+import android.os.Environment
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,135 +17,83 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.lccm.nuvy.ui.theme.NuvyTheme
+import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : ComponentActivity() {
+
+    private fun saveFileToDownloads(data: ByteArray, fileName: String) {
+        try {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = File(downloadsDir, fileName)
+
+            FileOutputStream(file).use { fos ->
+                fos.write(data)
+            }
+
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "✅ Archivo guardado en Descargas/$fileName",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        } catch (e: Exception) {
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "❌ Error al guardar: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             NuvyTheme {
-                var currentScreen by remember { mutableStateOf(NuvyDestinations.HOME) }
+                val navController = rememberNavController()
+                val viewModel: EditorViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            @Suppress("UNCHECKED_CAST")
+                            return EditorViewModel(
+                                onDownloadFile = { data, fileName ->
+                                    saveFileToDownloads(data, fileName)
+                                }
+                            ) as T
+                        }
+                    }
+                )
 
-                val navigateTo: (String) -> Unit = { screen ->
-                    currentScreen = screen
-                }
-
-                when (currentScreen) {
-
-                    // --- CAMBIO AQUÍ ---
-                    // "HOME" ahora es la única pantalla que usa NuvyScreen.
-                    // "CONNECT" y "EDITOR" te llevarán a las pantallas
-                    // principales pero con la barra de navegación.
-                    NuvyDestinations.HOME -> {
+                NavHost(navController = navController, startDestination = "nuvy") {
+                    composable("nuvy") {
                         NuvyScreen(
-                            onConnectClicked = { navigateTo(NuvyDestinations.CONNECT_DEVICE) },
-                            onEditorClicked = { navigateTo(NuvyDestinations.EDITOR) }
+                            onConnectClicked = { /* TODO: Implementar conexión por cable */ },
+                            onEditorClicked = { navController.navigate("editor") }
                         )
                     }
-
-                    // --- NUEVA LÓGICA DE NAVEGACIÓN ---
-                    // Si el usuario presiona "Conectar" o "Editor" en la barra de navegación,
-                    // lo llevamos a las pantallas correspondientes.
-                    NuvyDestinations.CONNECT -> {
-                        ConnectDeviceScreen(
-                            onPermitAccess = { navigateTo(NuvyDestinations.ACCESS_GRANTED) },
-                            onTryAgain = {},
-                            onNavigate = { screenName -> navigateTo(screenName) }
-                        )
-                    }
-                    NuvyDestinations.EDITOR -> {
+                    composable("editor") {
                         EditorScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onOpenFile = { navigateTo(NuvyDestinations.OPEN_FILE) },
-                            onNewFile = { navigateTo(NuvyDestinations.NEW_FILE) },
-                            onSave = { navigateTo(NuvyDestinations.FILE_SAVED) },
-                            onCompile = { navigateTo(NuvyDestinations.BUILD_PROCESS) },
-                            onUpload = { navigateTo(NuvyDestinations.OPEN_FILE) }
-                        )
-                    }
-
-                    NuvyDestinations.CONNECT_DEVICE -> {
-                        ConnectDeviceScreen(
-                            onPermitAccess = { navigateTo(NuvyDestinations.ACCESS_GRANTED) },
-                            onTryAgain = {},
-                            onNavigate = { screenName -> navigateTo(screenName) }
-                        )
-                    }
-
-                    NuvyDestinations.ACCESS_GRANTED -> {
-                        AccessGrantedScreen(
-                            onContinueClicked = { navigateTo(NuvyDestinations.UPLOAD_PROGRESS) },
-                            onNavigate = { screenName -> navigateTo(screenName) }
-                        )
-                    }
-
-                    NuvyDestinations.OPEN_FILE -> {
-                        OpenFileScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onOpen = { /*TODO*/ },
-                            onImport = { /*TODO*/ },
-                            onFileClick = { navigateTo(NuvyDestinations.FILE_PREVIEW) }
-                        )
-                    }
-
-                    NuvyDestinations.FILE_PREVIEW -> {
-                        FilePreviewScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoToEditor = { navigateTo(NuvyDestinations.EDITOR) },
-                            onGenerateUf2 = { navigateTo(NuvyDestinations.BUILD_PROCESS) }
-                        )
-                    }
-
-                    NuvyDestinations.NEW_FILE -> {
-                        NewFileScreen(
-                            onGoBack = { navigateTo(NuvyDestinations.EDITOR) },
-                            onCreate = { navigateTo(NuvyDestinations.EDITOR) }
-                        )
-                    }
-
-                    NuvyDestinations.FILE_SAVED -> {
-                        FileSavedScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoBackToEditor = { navigateTo(NuvyDestinations.EDITOR) },
-                            onTryAgain = { /*TODO*/ }
-                        )
-                    }
-
-                    NuvyDestinations.BUILD_PROCESS -> {
-                        BuildScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoBack = { navigateTo(NuvyDestinations.EDITOR) },
-                            onCancelBuild = { navigateTo(NuvyDestinations.EDITOR) },
-                            onBuildComplete = { navigateTo(NuvyDestinations.DOWNLOAD_READY) }
-                        )
-                    }
-
-                    NuvyDestinations.DOWNLOAD_READY -> {
-                        DownloadReadyScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoBack = { navigateTo(NuvyDestinations.EDITOR) },
-                            onUpload = { navigateTo(NuvyDestinations.CONNECT_DEVICE) },
-                            onSave = { /*TODO: Lógica de guardado*/ }
-                        )
-                    }
-
-                    // --- BLOQUE ACTUALIZADO ---
-                    NuvyDestinations.UPLOAD_PROGRESS -> {
-                        UploadScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoBack = { navigateTo(NuvyDestinations.EDITOR) },
-                            onCancelUpload = { navigateTo(NuvyDestinations.EDITOR) },
-                            onUploadFinished = { navigateTo(NuvyDestinations.UPLOAD_COMPLETE) }
-                        )
-                    }
-
-                    NuvyDestinations.UPLOAD_COMPLETE -> {
-                        UploadCompleteScreen(
-                            onNavigate = { screenName -> navigateTo(screenName) },
-                            onGoBack = { navigateTo(NuvyDestinations.EDITOR) },
-                            // --- CAMBIO AQUÍ ---
-                            // "Finalizar" te lleva al menú principal (HOME)
-                            onFinalize = { navigateTo(NuvyDestinations.HOME) }
+                            onNavigate = { route ->
+                                if (route == "home") {
+                                    navController.navigate("nuvy")
+                                }
+                            },
+                            onOpenFile = { /* TODO: Implementar abrir archivo */ },
+                            onNewFile = { /* TODO: Implementar nuevo archivo */ },
+                            onSave = { /* TODO: Implementar guardar */ },
+                            onCompile = { /* No usado, el botón llama directo al viewModel */ },
+                            onUpload = { /* TODO: Implementar subir a Pico */ },
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -158,6 +101,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
 // =================================================================================
 // PANTALLA 1: NuvyScreen (Esta parte no cambia)
 // =================================================================================

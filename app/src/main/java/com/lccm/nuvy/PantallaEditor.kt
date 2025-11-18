@@ -2,6 +2,8 @@ package com.lccm.nuvy
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
@@ -12,6 +14,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -29,45 +32,81 @@ fun EditorScreen(
     onNewFile: () -> Unit,
     onSave: () -> Unit,
     onCompile: () -> Unit,
-    onUpload: () -> Unit // <-- 1. AÑADE EL PARÁMETRO DE NUEVO
+    onUpload: () -> Unit,
+    viewModel: EditorViewModel
 ) {
-    val navigationItems = listOf(NuvyDestinations.HOME, NuvyDestinations.CONNECT, NuvyDestinations.EDITOR)
-    val navigationIcons = listOf(
-        Pair(Icons.Filled.Home, Icons.Outlined.Home),
-        Pair(Icons.Filled.Link, Icons.Outlined.Link),
-        Pair(Icons.Filled.Code, Icons.Outlined.Code)
-    )
-
-    // ... (Estados de codeText, selectedTabIndex, etc. no cambian)
-    var codeText by remember {
-        mutableStateOf("// Escribe tu código C aquí...")
-    }
-    var selectedTabIndex by remember { mutableStateOf(0) }
+    var codeText by remember { mutableStateOf("// Escribe tu código C aquí...") }
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var selectedNavIndex by remember { mutableIntStateOf(1) }
     val tabs = listOf("main.c", "Build log")
-    val lineNumbers = (1..20).joinToString("\n")
 
+    val compilationState by viewModel.compilationState.collectAsState()
+    val buildLog by viewModel.buildLog.collectAsState()
+    
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Mostrar notificación automática cuando se descarga
+    LaunchedEffect(compilationState) {
+        if (compilationState is CompilationState.Success) {
+            val fileName = (compilationState as CompilationState.Success).fileName
+            snackbarHostState.showSnackbar(
+                message = "✅ Descargado: $fileName",
+                duration = SnackbarDuration.Long
+            )
+            viewModel.resetState()
+        } else if (compilationState is CompilationState.Error) {
+            val error = compilationState as CompilationState.Error
+            snackbarHostState.showSnackbar(
+                message = "❌ Error: ${error.message}",
+                duration = SnackbarDuration.Long
+            )
+        }
+    }
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(title = { Text("Editor de código") })
-        },
+        topBar = { CenterAlignedTopAppBar(title = { Text("Editor de código") }) },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             NavigationBar {
-                navigationItems.forEachIndexed { index, item ->
-                    val icons = navigationIcons[index]
-                    val isSelected = (item == NuvyDestinations.EDITOR)
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { onNavigate(item) },
-                        label = { Text(text = item) },
-                        icon = {
-                            Icon(
-                                imageVector = if (isSelected) icons.first else icons.second,
-                                contentDescription = item
-                            )
-                        }
-                    )
-                }
+                NavigationBarItem(
+                    selected = selectedNavIndex == 0,
+                    onClick = {
+                        selectedNavIndex = 0
+                        onNavigate("home")
+                    },
+                    icon = {
+                        Icon(
+                            if (selectedNavIndex == 0) Icons.Filled.Home else Icons.Outlined.Home,
+                            contentDescription = "Inicio"
+                        )
+                    },
+                    label = { Text("Inicio") }
+                )
+                NavigationBarItem(
+                    selected = selectedNavIndex == 1,
+                    onClick = { selectedNavIndex = 1 },
+                    icon = {
+                        Icon(
+                            if (selectedNavIndex == 1) Icons.Filled.Code else Icons.Outlined.Code,
+                            contentDescription = "Editor"
+                        )
+                    },
+                    label = { Text("Editor") }
+                )
+                NavigationBarItem(
+                    selected = selectedNavIndex == 2,
+                    onClick = { 
+                        selectedNavIndex = 2
+                        // Por ahora no navega a ningún lado, puedes agregar funcionalidad después
+                    },
+                    icon = {
+                        Icon(
+                            if (selectedNavIndex == 2) Icons.Filled.Link else Icons.Outlined.Link,
+                            contentDescription = "Conexión"
+                        )
+                    },
+                    label = { Text("Conexión") }
+                )
             }
         }
     ) { paddingValues ->
@@ -78,24 +117,40 @@ fun EditorScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-
-            // --- Fila de botones superior ---
+            // Botones superiores
             Surface(
-                shape = RoundedCornerShape(50),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceAround
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FilledTonalButton(onClick = onNewFile) { Text("Nueva .c") }
-                    FilledTonalButton(onClick = onOpenFile) { Text("Abrir") }
-                    FilledTonalButton(onClick = onSave) { Text("Guardar") }
+                    FilledTonalButton(
+                        onClick = onNewFile,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Nueva .c")
+                    }
+                    FilledTonalButton(
+                        onClick = onOpenFile,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Abrir")
+                    }
+                    FilledTonalButton(
+                        onClick = onSave,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Guardar")
+                    }
                 }
             }
 
-            // --- Pestañas de Archivos ---
+            // Pestañas
             TabRow(selectedTabIndex = selectedTabIndex) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
@@ -106,69 +161,105 @@ fun EditorScreen(
                 }
             }
 
-            // --- Área del Editor de Código ---
+            // Editor o Build Log
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Row(modifier = Modifier.padding(8.dp)) {
-                    Text(
-                        text = lineNumbers,
-                        textAlign = TextAlign.End,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(top = 12.dp, end = 8.dp),
-                        fontFamily = FontFamily.Monospace,
-                        lineHeight = 20.sp
-                    )
-
-                    TextField(
-                        value = codeText,
-                        onValueChange = { codeText = it },
-                        modifier = Modifier.fillMaxSize(),
-                        colors = TextFieldDefaults.colors(
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent
-                        ),
-                        textStyle = LocalTextStyle.current.copy(
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 20.sp
+                if (selectedTabIndex == 0) {
+                    // Editor de código
+                    Row(modifier = Modifier.padding(8.dp)) {
+                        // Números de línea
+                        Column(
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            val lineCount = codeText.count { it == '\n' } + 1
+                            (1..lineCount).forEach { lineNumber ->
+                                Text(
+                                    text = "$lineNumber",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontFamily = FontFamily.Monospace,
+                                    textAlign = TextAlign.End,
+                                    modifier = Modifier.width(30.dp)
+                                )
+                            }
+                        }
+                        
+                        // Editor de texto
+                        TextField(
+                            value = codeText,
+                            onValueChange = { codeText = it },
+                            modifier = Modifier.fillMaxSize(),
+                            textStyle = LocalTextStyle.current.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 14.sp
+                            ),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
                         )
+                    }
+                } else {
+                    // Build log
+                    Text(
+                        text = buildLog.ifEmpty { "Sin actividad de compilación" },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
+                            .verticalScroll(rememberScrollState()),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
 
-            // --- Botones de Compilar y Subir ---
-            // 2. REVIERTE LOS CAMBIOS AQUÍ
+            // Botones de acción
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Button(
-                    onClick = onCompile, // Botón de compilar
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    shape = RoundedCornerShape(50)
+                    onClick = {
+                        selectedTabIndex = 1 // Cambiar a Build log
+                        viewModel.compileCode(codeText)
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp),
+                    enabled = compilationState !is CompilationState.Compiling
                 ) {
-                    Text("Compilar", fontSize = 16.sp)
+                    if (compilationState is CompilationState.Compiling) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("Compilar")
+                    }
                 }
-                // Vuelve a añadir el botón "Subir"
+
                 FilledTonalButton(
                     onClick = onUpload,
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    shape = RoundedCornerShape(50)
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp)
                 ) {
-                    Text("Subir", fontSize = 16.sp)
+                    Text("Subir")
                 }
             }
         }
     }
 }
 
-// --- Vista Previa ---
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun EditorScreenPreview() {
@@ -179,7 +270,8 @@ fun EditorScreenPreview() {
             onNewFile = {},
             onSave = {},
             onCompile = {},
-            onUpload = {} // <-- 3. AÑÁDELO A LA VISTA PREVIA
+            onUpload = {},
+            viewModel = EditorViewModel()
         )
     }
 }
