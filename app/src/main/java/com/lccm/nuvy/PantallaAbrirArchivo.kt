@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lccm.nuvy.components.NuvyBottomNavBar
 import com.lccm.nuvy.ui.theme.NuvyTheme
 
 // --- ESTRUCTURA DE DATOS (NO PRIVADA) ---
@@ -49,13 +50,6 @@ fun OpenFileScreen(
     files: List<FileListItem>,
     onFileImported: (Uri) -> Unit
 ) {
-    val navigationItems = listOf(NuvyDestinations.HOME, NuvyDestinations.CONNECT, NuvyDestinations.EDITOR)
-    val navigationIcons = listOf(
-        Pair(Icons.Filled.Home, Icons.Outlined.Home),
-        Pair(Icons.Filled.Link, Icons.Outlined.Link),
-        Pair(Icons.Filled.Code, Icons.Outlined.Code)
-    )
-
     var searchQuery by remember { mutableStateOf("") }
 
     val filteredList = remember(searchQuery, files) {
@@ -88,23 +82,10 @@ fun OpenFileScreen(
             CenterAlignedTopAppBar(title = { Text("Abrir archivo") })
         },
         bottomBar = {
-            NavigationBar {
-                navigationItems.forEachIndexed { index, item ->
-                    val icons = navigationIcons[index]
-                    val isSelected = (item == NuvyDestinations.EDITOR)
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { onNavigate(item) },
-                        label = { Text(text = item) },
-                        icon = {
-                            Icon(
-                                imageVector = if (isSelected) icons.first else icons.second,
-                                contentDescription = item
-                            )
-                        }
-                    )
-                }
-            }
+            NuvyBottomNavBar(
+                currentDestination = NuvyDestinations.EDITOR,
+                onNavigate = onNavigate
+            )
         }
     ) { paddingValues ->
         LazyColumn(

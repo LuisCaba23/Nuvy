@@ -86,7 +86,7 @@ class NuvyHubApiService {
             }
         }
 
-    suspend fun downloadUF2(downloadUrl: String): Result<ByteArray> = withContext(Dispatchers.IO) {
+    suspend fun downloadBIN(downloadUrl: String): Result<ByteArray> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
                 .url("$baseUrl$downloadUrl")
@@ -102,7 +102,7 @@ class NuvyHubApiService {
                 Result.failure(Exception("Error al descargar: ${response.code}"))
             }
         } catch (e: Exception) {
-            Result.failure(Exception("Error descargando UF2: ${e.message}"))
+            Result.failure(Exception("Error descargando BIN: ${e.message}"))
         }
     }
 

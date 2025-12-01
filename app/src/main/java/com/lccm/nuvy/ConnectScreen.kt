@@ -1,53 +1,34 @@
 package com.lccm.nuvy
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.lccm.nuvy.components.NuvyBottomNavBar
 import com.lccm.nuvy.ui.theme.NuvyTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectScreen(onNavigate: (String) -> Unit) {
-    val navigationItems = listOf(NuvyDestinations.HOME, NuvyDestinations.CONNECT, NuvyDestinations.EDITOR)
-    val navigationIcons = listOf(
-        Pair(Icons.Filled.Home, Icons.Outlined.Home),
-        Pair(Icons.Filled.Link, Icons.Outlined.Link),
-        Pair(Icons.Filled.Code, Icons.Outlined.Code)
-    )
+    var espIpAddress by remember { mutableStateOf("") }
+    var isConnected by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(title = { Text("Conectar") })
+            CenterAlignedTopAppBar(title = { Text("Conectar ESP32") })
         },
         bottomBar = {
-            NavigationBar {
-                navigationItems.forEachIndexed { index, item ->
-                    val icons = navigationIcons[index]
-                    val isSelected = (item == NuvyDestinations.CONNECT)
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { onNavigate(item) },
-                        label = { Text(text = item) },
-                        icon = {
-                            Icon(
-                                imageVector = if (isSelected) icons.first else icons.second,
-                                contentDescription = item
-                            )
-                        }
-                    )
-                }
-            }
+            NuvyBottomNavBar(
+                currentDestination = NuvyDestinations.CONNECT,
+                onNavigate = onNavigate
+            )
         }
     ) { paddingValues ->
         Column(
@@ -58,15 +39,59 @@ fun ConnectScreen(onNavigate: (String) -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Icon(
+                imageVector = Icons.Default.Wifi,
+                contentDescription = "WiFi",
+                modifier = Modifier.size(80.dp),
+                tint = if (isConnected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             Text(
-                text = "Conectar dispositivo",
+                text = if (isConnected) "Conectado" else "Desconectado",
                 style = MaterialTheme.typography.headlineMedium
             )
-            Spacer(modifier = Modifier.height(16.dp))
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             Text(
-                text = "Conecta tu ESP32 para programarlo",
-                style = MaterialTheme.typography.bodyLarge
+                text = "Conecta tu ESP32 a la misma red WiFi y escribe su IP",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
             )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            OutlinedTextField(
+                value = espIpAddress,
+                onValueChange = { espIpAddress = it },
+                label = { Text("Dirección IP del ESP32") },
+                placeholder = { Text("192.168.1.100") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = {
+                    // TODO: Implementar conexión OTA
+                    if (espIpAddress.isNotEmpty()) {
+                        isConnected = !isConnected
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(50)
+            ) {
+                Text(if (isConnected) "Desconectar" else "Conectar")
+            }
         }
     }
 }
