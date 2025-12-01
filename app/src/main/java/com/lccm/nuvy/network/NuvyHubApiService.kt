@@ -24,22 +24,25 @@ class NuvyHubApiService {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
+    // ⚠️ Asegúrate de que esta URL sea accesible desde el teléfono
+    // Si usas emulador: "http://10.0.2.2:8080"
+    // Si es dispositivo físico: La IP de tu PC "http://192.168.1.X:8080"
+    // Si usas NuvyHub online: "https://nuvyhub.online"
     private val baseUrl = "https://nuvyhub.online"
 
-    suspend fun compileCode(codeContent: String, fileName: String = "main.c"): Result<BuildResponse> =
+    suspend fun compileCode(codeContent: String, fileName: String): Result<BuildResponse> =
         withContext(Dispatchers.IO) {
             try {
-                // Crear archivo temporal con el código
+                // Crear archivo temporal
                 val tempFile = File.createTempFile("code_", ".c")
                 tempFile.writeText(codeContent)
 
-                // Crear FormData con el archivo
                 val requestBody = MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
                     .addFormDataPart(
                         "code",
                         fileName,
-                        tempFile.asRequestBody("text/x-c".toMediaType())
+                        tempFile.asRequestBody("text/plain".toMediaType())
                     )
                     .build()
 
@@ -51,11 +54,9 @@ class NuvyHubApiService {
                 val response = client.newCall(request).execute()
                 val responseBody = response.body?.string() ?: ""
 
-                // Limpiar archivo temporal
                 tempFile.delete()
 
                 if (response.isSuccessful) {
-                    // Parsear respuesta JSON manualmente
                     val success = responseBody.contains("\"success\":true")
                     val downloadUrl = extractJsonValue(responseBody, "downloadUrl")
                     val log = extractJsonValue(responseBody, "log")
@@ -71,18 +72,13 @@ class NuvyHubApiService {
                     )
                 } else {
                     val error = extractJsonValue(responseBody, "error") ?: "Error desconocido"
-                    Result.success(
-                        BuildResponse(
-                            success = false,
-                            error = error,
-                            log = extractJsonValue(responseBody, "log")
-                        )
+                    val log = extractJsonValue(responseBody, "log")
+                    Result.success( // Devolvemos success con flag false para manejarlo en ViewModel
+                        BuildResponse(success = false, error = error, log = log)
                     )
                 }
-            } catch (e: IOException) {
-                Result.failure(Exception("Error de red: ${e.message}"))
             } catch (e: Exception) {
-                Result.failure(Exception("Error inesperado: ${e.message}"))
+                Result.failure(e)
             }
         }
 
@@ -99,10 +95,10 @@ class NuvyHubApiService {
                 val bytes = response.body?.bytes() ?: throw Exception("Respuesta vacía")
                 Result.success(bytes)
             } else {
-                Result.failure(Exception("Error al descargar: ${response.code}"))
+                Result.failure(Exception("Error HTTP: ${response.code}"))
             }
         } catch (e: Exception) {
-            Result.failure(Exception("Error descargando BIN: ${e.message}"))
+            Result.failure(e)
         }
     }
 

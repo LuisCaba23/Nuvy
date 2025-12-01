@@ -1,5 +1,6 @@
 package com.lccm.nuvy
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lccm.nuvy.network.NuvyHubApiService
@@ -10,13 +11,16 @@ import kotlinx.coroutines.launch
 sealed class CompilationState {
     object Idle : CompilationState()
     object Compiling : CompilationState()
-    data class Success(val fileName: String) : CompilationState()
-    data class Error(val message: String, val log: String? = null) : CompilationState()
+    data class Success(val message: String) : CompilationState()
+    data class Error(val message: String) : CompilationState()
 }
 
 class EditorViewModel(
-    private val onDownloadFile: (ByteArray, String) -> Unit = { _, _ -> }
+    private val context: Context,
+    private val onDownloadFile: (ByteArray, String) -> Unit // Callback para guardar archivo
 ) : ViewModel() {
+
+    // Instanciamos el servicio directamente
     private val apiService = NuvyHubApiService()
 
     private val _compilationState = MutableStateFlow<CompilationState>(CompilationState.Idle)
@@ -25,55 +29,62 @@ class EditorViewModel(
     private val _buildLog = MutableStateFlow("")
     val buildLog: StateFlow<String> = _buildLog
 
-    fun compileCode(code: String, fileName: String = "main.c") {
+    private var currentFileType = "c"
+
+    fun setFileType(type: String) {
+        currentFileType = type
+    }
+
+    fun compileCode(code: String, currentFileName: String) {
         viewModelScope.launch {
             _compilationState.value = CompilationState.Compiling
-            _buildLog.value = "🔨 Enviando código al servidor...\n"
+            _buildLog.value = "🔄 Preparando compilación ($currentFileType)...\n"
 
-            val result = apiService.compileCode(code, fileName)
+            // Determinar nombre y extensión
+            val extension = if (currentFileType == "ino") ".ino" else ".c"
+            // Usamos el nombre actual pero forzamos la extensión correcta para el compilador
+            val fileNameToSend = if (currentFileName.endsWith(extension)) currentFileName else "main$extension"
+
+            // Llamada al servicio (solo pasamos strings)
+            val result = apiService.compileCode(code, fileNameToSend)
 
             result.fold(
                 onSuccess = { response ->
-                    _buildLog.value += (response.log ?: "")
+                    if (response.success) {
+                        _buildLog.value += "\n✅ Compilación exitosa!\nLogs:\n${response.log ?: ""}"
+                        _compilationState.value = CompilationState.Success("Compilación exitosa")
 
-                    if (response.success && response.downloadUrl != null) {
-                        _buildLog.value += "\n✅ Compilación exitosa\n📥 Descargando BIN...\n"
-                        downloadAndSaveBIN(response.downloadUrl, response.jobId ?: "output")
+                        // Si hay URL de descarga, descargar automáticamente
+                        response.downloadUrl?.let { url ->
+                            _buildLog.value += "\n📥 Descargando binario..."
+                            downloadFirmware(url, response.jobId ?: "firmware")
+                        }
                     } else {
-                        _compilationState.value = CompilationState.Error(
-                            response.error ?: "Error desconocido",
-                            response.log
-                        )
-                        _buildLog.value += "\n❌ Error: ${response.error}\n"
+                        _buildLog.value += "\n❌ Error del servidor:\n${response.error}\nLogs:\n${response.log}"
+                        _compilationState.value = CompilationState.Error(response.error ?: "Error desconocido")
                     }
                 },
                 onFailure = { error ->
-                    _compilationState.value = CompilationState.Error(error.message ?: "Error desconocido")
-                    _buildLog.value += "\n❌ ${error.message}\n"
+                    _buildLog.value += "\n❌ Error de red: ${error.message}"
+                    _compilationState.value = CompilationState.Error(error.message ?: "Error de red")
                 }
             )
         }
     }
 
-    private suspend fun downloadAndSaveBIN(downloadUrl: String, jobId: String) {
-        val result = apiService.downloadBIN(downloadUrl)
-
-        result.fold(
-            onSuccess = { binData ->
-                val fileName = "firmware_$jobId.bin"
-                // Descargar automáticamente
-                onDownloadFile(binData, fileName)
-                _compilationState.value = CompilationState.Success(fileName)
-                _buildLog.value += "✅ Archivo descargado: $fileName\n"
-            },
-            onFailure = { error ->
-                _compilationState.value = CompilationState.Error("Error descargando: ${error.message}")
-                _buildLog.value += "\n❌ ${error.message}\n"
-            }
-        )
-    }
-
-    fun resetState() {
-        _compilationState.value = CompilationState.Idle
+    private fun downloadFirmware(url: String, jobId: String) {
+        viewModelScope.launch {
+            val result = apiService.downloadBIN(url)
+            result.fold(
+                onSuccess = { bytes ->
+                    val finalName = "firmware_$jobId.bin"
+                    onDownloadFile(bytes, finalName)
+                    _buildLog.value += "\n💾 Guardado como $finalName"
+                },
+                onFailure = {
+                    _buildLog.value += "\n❌ Error descargando BIN: ${it.message}"
+                }
+            )
+        }
     }
 }

@@ -24,6 +24,7 @@ import com.lccm.nuvy.ui.theme.NuvyTheme
 fun FilePreviewScreen(
     onNavigate: (String) -> Unit,
     onEdit: () -> Unit,
+    onCancel: () -> Unit, // 👈 NUEVO
     fileName: String,
     fileContent: String
 ) {
@@ -42,48 +43,61 @@ fun FilePreviewScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             FilePreviewInfoCard(fileName = fileName)
 
             Text(
-                text = "Contenido",
-                style = MaterialTheme.typography.titleMedium
+                text = "Contenido del archivo",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
             )
 
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = Color(0xFF1E1E1E)
                 )
             ) {
                 Text(
                     text = fileContent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .heightIn(min = 200.dp, max = 400.dp)
+                        .verticalScroll(rememberScrollState()),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .verticalScroll(rememberScrollState())
+                    color = Color.White
                 )
             }
 
             Text(
-                text = "Vista previa de solo lectura. Toca Editar para modificar el archivo.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                text = "¿Deseas editar este archivo?",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
 
-            Button(
-                onClick = onEdit,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(50)
+            // 👇 BOTONES ACTUALIZADOS
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Editar", fontSize = 16.sp)
+                OutlinedButton(
+                    onClick = onCancel,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Cancelar")
+                }
+                Button(
+                    onClick = onEdit,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Editar")
+                }
             }
         }
     }
@@ -106,28 +120,36 @@ fun FilePreviewInfoCard(fileName: String) {
                     modifier = Modifier
                         .size(48.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                )
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "📄",
+                        fontSize = 24.sp
+                    )
+                }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = fileName,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Archivo local",
-                        color = Color.Gray,
-                        fontSize = 12.sp
+                        text = "Archivo C",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surface
+                    color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Text(
-                        text = ".c",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        fontSize = 12.sp
+                        text = ".C",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
@@ -142,6 +164,7 @@ fun FilePreviewScreenPreview() {
         FilePreviewScreen(
             onNavigate = {},
             onEdit = {},
+            onCancel = {},
             fileName = "preview.c",
             fileContent = "// Contenido de ejemplo\n#include <stdio.h>\n\nint main() {\n    return 0;\n}"
         )
