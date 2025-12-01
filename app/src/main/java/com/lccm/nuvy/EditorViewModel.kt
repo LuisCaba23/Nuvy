@@ -37,8 +37,8 @@ class EditorViewModel(
                     _buildLog.value += (response.log ?: "")
 
                     if (response.success && response.downloadUrl != null) {
-                        _buildLog.value += "\n✅ Compilación exitosa\n📥 Descargando UF2...\n"
-                        downloadAndSaveUF2(response.downloadUrl, response.jobId ?: "output")
+                        _buildLog.value += "\n✅ Compilación exitosa\n📥 Descargando BIN...\n"
+                        downloadAndSaveBIN(response.downloadUrl, response.jobId ?: "output")
                     } else {
                         _compilationState.value = CompilationState.Error(
                             response.error ?: "Error desconocido",
@@ -55,14 +55,14 @@ class EditorViewModel(
         }
     }
 
-    private suspend fun downloadAndSaveUF2(downloadUrl: String, jobId: String) {
-        val result = apiService.downloadUF2(downloadUrl)
+    private suspend fun downloadAndSaveBIN(downloadUrl: String, jobId: String) {
+        val result = apiService.downloadBIN(downloadUrl)
 
         result.fold(
-            onSuccess = { uf2Data ->
-                val fileName = "firmware_$jobId.uf2"
+            onSuccess = { binData ->
+                val fileName = "firmware_$jobId.bin"
                 // Descargar automáticamente
-                onDownloadFile(uf2Data, fileName)
+                onDownloadFile(binData, fileName)
                 _compilationState.value = CompilationState.Success(fileName)
                 _buildLog.value += "✅ Archivo descargado: $fileName\n"
             },

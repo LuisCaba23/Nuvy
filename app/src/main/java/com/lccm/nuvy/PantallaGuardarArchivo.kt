@@ -3,14 +3,7 @@ package com.lccm.nuvy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,6 +14,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lccm.nuvy.components.NuvyBottomNavBar
 import com.lccm.nuvy.ui.theme.NuvyTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,81 +22,53 @@ import com.lccm.nuvy.ui.theme.NuvyTheme
 fun FileSavedScreen(
     onNavigate: (String) -> Unit,
     onGoBackToEditor: () -> Unit,
-    onTryAgain: () -> Unit,
     fileName: String
 ) {
-    val navigationItems = listOf(NuvyDestinations.HOME, NuvyDestinations.CONNECT, NuvyDestinations.EDITOR)
-    val navigationIcons = listOf(
-        Pair(Icons.Filled.Home, Icons.Outlined.Home),
-        Pair(Icons.Filled.Link, Icons.Outlined.Link),
-        Pair(Icons.Filled.Code, Icons.Outlined.Code)
-    )
-
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Cambios guardados") },
-                navigationIcon = {
-                    IconButton(onClick = onGoBackToEditor) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
-                    }
-                }
-            )
+            CenterAlignedTopAppBar(title = { Text("Archivo guardado") })
         },
         bottomBar = {
-            NavigationBar {
-                navigationItems.forEachIndexed { index, item ->
-                    val icons = navigationIcons[index]
-                    val isSelected = (item == NuvyDestinations.EDITOR)
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { onNavigate(item) },
-                        label = { Text(text = item) },
-                        icon = {
-                            Icon(
-                                imageVector = if (isSelected) icons.first else icons.second,
-                                contentDescription = item
-                            )
-                        }
-                    )
-                }
-            }
+            NuvyBottomNavBar(
+                currentDestination = NuvyDestinations.EDITOR,
+                onNavigate = onNavigate
+            )
         }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-
-            // --- Icono de Éxito ---
+            // Ícono de éxito
             Surface(
                 shape = CircleShape,
-                color = Color(0xFF4CAF50),
+                color = MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier.size(80.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Éxito",
-                    tint = Color.White,
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = "Guardado",
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(20.dp)
                 )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- Textos de Estado ---
             Text(
                 text = "Guardado exitoso",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
+
             Spacer(modifier = Modifier.height(8.dp))
+
             Text(
-                text = "Tu archivo $fileName fue guardado y almacenado.",
+                text = "Tu archivo $fileName fue guardado en Descargas.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.Gray,
                 textAlign = TextAlign.Center
@@ -110,19 +76,16 @@ fun FileSavedScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // --- Detalles del Guardado ---
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 InfoRow(label = "Archivo", value = fileName)
-                InfoRow(label = "Destino", value = "Almacenamiento/Descargas")
+                InfoRow(label = "Destino", value = "Descargas")
             }
 
-            // Spacer para empujar el botón hacia abajo
             Spacer(modifier = Modifier.weight(1f))
 
-            // --- Botón de Acción ---
             Button(
                 onClick = onGoBackToEditor,
                 modifier = Modifier
@@ -143,7 +106,11 @@ private fun InfoRow(label: String, value: String) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(text = label, color = Color.Gray, fontSize = 16.sp)
-        Text(text = value, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text(
+            text = value,
+            fontWeight = FontWeight.Medium,
+            fontSize = 16.sp
+        )
     }
 }
 
@@ -154,8 +121,7 @@ fun FileSavedScreenPreview() {
         FileSavedScreen(
             onNavigate = {},
             onGoBackToEditor = {},
-            onTryAgain = {},
-            fileName = "preview.c"
+            fileName = "main.c"
         )
     }
 }
