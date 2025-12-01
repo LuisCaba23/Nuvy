@@ -41,7 +41,24 @@ class MainActivity : ComponentActivity() {
 
     // ... (Tus funciones saveCodeFile, loadFilesFromDownloads, openFile se quedan igual) ...
     // Solo las omito aquí para ahorrar espacio, pero NO LAS BORRES.
-    private fun saveCodeFile(fileName: String, code: String) { /* Tu código aquí */ }
+    private fun saveCodeFile(fileName: String, code: String) {
+        try {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = File(downloadsDir, fileName)
+            file.writeText(code)
+
+            runOnUiThread {
+                Toast.makeText(this, "✅ Guardado: $fileName", Toast.LENGTH_LONG).show()
+            }
+
+            // Actualizar lista de archivos
+            loadFilesFromDownloads()
+        } catch (e: Exception) {
+            runOnUiThread {
+                Toast.makeText(this, "❌ Error guardando: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     private fun loadFilesFromDownloads() { /* Tu código aquí */ }
     private fun openFile(fileItem: FileListItem) { /* Tu código aquí */ }
 

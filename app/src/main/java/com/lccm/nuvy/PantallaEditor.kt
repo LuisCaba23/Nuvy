@@ -1,10 +1,12 @@
 package com.lccm.nuvy
 
-import androidx.compose.foundation.BorderStroke
+import android.net.Uri
+import android.provider.OpenableColumns
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.*
@@ -12,20 +14,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight // 👈 IMPORTANTE
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lccm.nuvy.components.NuvyBottomNavBar
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
-@OptIn(ExperimentalMaterial3Api::class) // 👈 IMPORTANTE para FilterChip
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
     currentFileName: String,
     codeText: String,
     onCodeChange: (String) -> Unit,
     onNavigate: (String) -> Unit,
-    onOpenFile: () -> Unit,
+    onOpenFile: () -> Unit, // Se ignora, usamos el launcher interno
     onNewFile: (String, String) -> Unit,
     onSaveFile: (String) -> Unit,
     onCompile: () -> Unit,
@@ -36,6 +41,47 @@ fun EditorScreen(
     var showNewFileDialog by remember { mutableStateOf(false) }
     var showSaveDialog by remember { mutableStateOf(false) }
     var selectedFileType by remember { mutableStateOf("c") }
+
+    val context = LocalContext.current
+
+    // --- LÓGICA DE ABRIR ARCHIVO (Explorador Nativo) ---
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                // 1. Obtener nombre real del archivo
+                var filename = "archivo_importado.c"
+                val cursor = context.contentResolver.query(uri, null, null, null, null)
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex != -1) {
+                            filename = it.getString(nameIndex)
+                        }
+                    }
+                }
+
+                // 2. Leer contenido
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val reader = BufferedReader(InputStreamReader(inputStream))
+                val content = StringBuilder()
+                var line = reader.readLine()
+                while (line != null) {
+                    content.append(line).append("\n")
+                    line = reader.readLine()
+                }
+                inputStream?.close()
+
+                // 3. Actualizar editor
+                onNewFile(filename, content.toString())
+                Toast.makeText(context, "📂 Abierto: $filename", Toast.LENGTH_SHORT).show()
+
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error al abrir archivo", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     val compilationState by viewModel.compilationState.collectAsState()
     val buildLog by viewModel.buildLog.collectAsState()
@@ -50,10 +96,30 @@ fun EditorScreen(
         }
     }
 
-    // Diálogos y Scaffold (Igual que antes) ...
-    // ...
-    // Asegúrate de copiar el resto del Scaffold, TabRow y Tabs de tu código anterior
-    // Lo importante aquí es que TabRow llama a CodeEditorTab
+    // --- DIÁLOGOS MODALES ---
+
+    if (showNewFileDialog) {
+        NewFileDialog(
+            onDismiss = { showNewFileDialog = false },
+            onCreate = { fileName, code ->
+                onNewFile(fileName, code)
+                showNewFileDialog = false
+            }
+        )
+    }
+
+    if (showSaveDialog) {
+        SaveFileDialog(
+            currentFileName = currentFileName,
+            onDismiss = { showSaveDialog = false },
+            onSave = { fileName ->
+                onSaveFile(fileName)
+                showSaveDialog = false
+            }
+        )
+    }
+
+    // --- UI PRINCIPAL ---
 
     Scaffold(
         topBar = { CenterAlignedTopAppBar(title = { Text("Editor") }) },
@@ -71,13 +137,13 @@ fun EditorScreen(
                     codeText = codeText,
                     onCodeChange = onCodeChange,
                     currentFileName = currentFileName,
-                    onNewFile = { showNewFileDialog = true },
-                    onOpenFile = onOpenFile,
-                    onSaveFile = { showSaveDialog = true },
+                    onNewFilePress = { showNewFileDialog = true },
+                    onOpenFilePress = { filePickerLauncher.launch("*/*") }, // Lanza explorador
+                    onSaveFilePress = { showSaveDialog = true },
                     onCompile = {
                         viewModel.setFileType(selectedFileType)
                         onCompile()
-                        selectedTabIndex = 1 // Cambiar a tab de logs automáticamente
+                        selectedTabIndex = 1
                     },
                     compilationState = compilationState,
                     selectedFileType = selectedFileType,
@@ -91,7 +157,6 @@ fun EditorScreen(
             }
         }
     }
-    // ... Diálogos aquí ...
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,9 +165,9 @@ private fun CodeEditorTab(
     codeText: String,
     onCodeChange: (String) -> Unit,
     currentFileName: String,
-    onNewFile: () -> Unit,
-    onOpenFile: () -> Unit,
-    onSaveFile: () -> Unit,
+    onNewFilePress: () -> Unit,
+    onOpenFilePress: () -> Unit,
+    onSaveFilePress: () -> Unit,
     onCompile: () -> Unit,
     compilationState: CompilationState,
     selectedFileType: String,
@@ -164,28 +229,106 @@ private fun CodeEditorTab(
             }
         }
 
-        // Botones extra (Nuevo, Abrir, Guardar) ...
         Spacer(modifier = Modifier.height(8.dp))
+
+        // --- BOTONES (Nuevo | Abrir | Guardar) ---
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onNewFile, modifier = Modifier.weight(1f)) { Text("Nuevo") }
-            OutlinedButton(onClick = onSaveFile, modifier = Modifier.weight(1f)) { Text("Guardar") }
+            OutlinedButton(onClick = onNewFilePress, modifier = Modifier.weight(1f)) {
+                Text("Nuevo")
+            }
+            OutlinedButton(onClick = onOpenFilePress, modifier = Modifier.weight(1f)) {
+                Text("Abrir")
+            }
+            Button(onClick = onSaveFilePress, modifier = Modifier.weight(1f)) {
+                Text("Guardar")
+            }
         }
     }
 }
 
-// CompileTab se mantiene igual que en tu código anterior
+// --- DIÁLOGOS (Lógica corregida) ---
+
+@Composable
+fun NewFileDialog(onDismiss: () -> Unit, onCreate: (String, String) -> Unit) {
+    var fileName by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Nuevo Archivo") },
+        text = {
+            Column {
+                Text("Nombre del archivo (sin extensión):")
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = fileName,
+                    onValueChange = { fileName = it },
+                    label = { Text("Ej: main") },
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if(fileName.isNotEmpty()) {
+                    onCreate(fileName, getDefaultWiFiCode())
+                }
+            }) { Text("Crear") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
+
+@Composable
+fun SaveFileDialog(currentFileName: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    // Limpiamos la extensión visualmente para evitar "archivo.c.c"
+    val cleanName = remember(currentFileName) {
+        currentFileName.removeSuffix(".c").removeSuffix(".ino")
+    }
+
+    // Usamos remember con key para que se actualice si cambia el archivo
+    var fileName by remember(currentFileName) { mutableStateOf(cleanName) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Guardar Archivo") },
+        text = {
+            Column {
+                Text("Nombre para guardar (se añadirá .c/.ino):")
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = fileName,
+                    onValueChange = { fileName = it },
+                    label = { Text("Nombre") },
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if(fileName.isNotEmpty()) onSave(fileName)
+            }) { Text("Guardar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
+
+// CompileTab (Sin cambios)
 @Composable
 private fun CompileTab(
     buildLog: String,
     compilationState: CompilationState,
     onNavigateToConnect: () -> Unit
 ) {
+    // ... (Tu código de CompileTab existente)
+    // Para no alargar la respuesta, copia aquí tu función CompileTab idéntica
+    // Si no la tienes a la mano, te la dejo simplificada aquí:
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Card(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF222222))
         ) {
-            Column(modifier = Modifier.padding(12.dp).verticalScroll(rememberScrollState())) {
+            // Necesitas importar foundation.verticalScroll y rememberScrollState
+            Column(modifier = Modifier.padding(12.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                 Text(text = buildLog, color = Color.Green, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             }
         }
